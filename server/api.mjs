@@ -50,6 +50,16 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    const requireUser=()=>{if(!user)fail(401,'Sign in to continue.');};
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
    if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview});
+   if(request.method==='POST'&&path==='/reset-password'){
+    await rate('reset-ip:'+digest(context.ip||'unknown'),20,900);
+    const token=clean(body.token,100);if(!/^[a-f0-9]{64}$/.test(token))fail(400,'This reset link is invalid or expired. Ask the administrator for a new one.');
+    const password=await hashPassword(passwordInput(body.password)),recovery=randomBytes(20).toString('hex');
+    const changed=await rows(`WITH consumed AS (
+     DELETE FROM settings WHERE CASE WHEN key LIKE 'password-reset:%' THEN value::jsonb->>'hash'=$1 AND (value::jsonb->>'expires')::timestamptz>now() ELSE false END RETURNING substring(key from 16) AS user_id,value::jsonb->>'recovery' AS recovery
+    ), updated AS (UPDATE users SET password_hash=$2,recovery_hash=$3 WHERE id=(SELECT user_id FROM consumed) AND recovery_hash=(SELECT recovery FROM consumed) RETURNING id), revoked AS (DELETE FROM sessions WHERE user_id IN (SELECT id FROM updated)) SELECT id FROM updated`,[digest(token),password,digest(recovery)]);
+    if(!changed.length)fail(400,'This reset link is invalid or expired. Ask the administrator for a new one.');
+    return json({ok:true,recovery});
+   }
    if(request.method==='GET'&&path==='/products'){
     const products=await rows(`SELECT p.*,count(v.user_id)::int AS total,count(v.user_id) FILTER(WHERE v.choice='slay')::int AS slays,max(CASE WHEN v.user_id=$1 THEN v.choice ELSE NULL END) AS my_vote FROM products p LEFT JOIN votes v ON v.product_id=p.id WHERE p.active=true GROUP BY p.id ORDER BY p.created_at,p.id`,[user?.id||'']);
     const daily=await rows(`SELECT p.id,count(*)::int AS total,count(*) FILTER(WHERE v.choice='slay')::int AS slays FROM products p JOIN votes v ON v.product_id=p.id WHERE p.active=true AND v.created_at >= (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-interval '1 day' AND v.created_at < (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') GROUP BY p.id HAVING count(*)>=10 ORDER BY p.id`);
@@ -117,6 +127,17 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    if(path.startsWith('/admin/')){
     requireAdmin();
+    if(request.method==='GET'&&path==='/admin/users'){
+     const search=clean(url.searchParams.get('search'),30),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
+     return json({users:await rows(`SELECT u.id,u.username,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u WHERE strpos(u.username,$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
+    }
+    if(request.method==='POST'&&path==='/admin/reset-link'){
+     await rate('admin-reset:'+user.id,30,3600);
+     const target=(await rows('SELECT id,recovery_hash FROM users WHERE id=$1',[clean(body.user_id,100)]))[0];if(!target)fail(404,'User not found.');
+     const token=randomBytes(32).toString('hex'),expires=new Date(Date.now()+30*60000).toISOString();
+     await rows('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value',['password-reset:'+target.id,JSON.stringify({hash:digest(token),expires,recovery:target.recovery_hash})]);
+     return json({link:url.origin+'/#reset-password?token='+token,expires});
+    }
     if(request.method==='POST'&&path==='/admin/lookup'){await rate('lookup:'+user.id,20,300);return json(await lookup(urlInput(body.url)));}
     if(request.method==='POST'&&path==='/admin/upload'){
      await rate('upload:'+user.id,50,86400);if(!media)fail(503,'Photo storage is not available right now.');
