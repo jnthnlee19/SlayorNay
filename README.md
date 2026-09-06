@@ -10,6 +10,8 @@ A mobile-friendly nail-product voting website, built from scratch for GitHub + N
 - Scores with vote counts. Daily picks use the previous UTC day, require 10 votes and a majority. All-time ranked lists require 10 votes.
 - Product submissions by community members and brands, with admin approval.
 - Admin product creation/editing/hiding and disclosed affiliate links.
+- Admin product-detail lookup from public HTTPS pages (JSON-LD/Open Graph), with review before applying. Purchase/affiliate links are preserved; an optional separate source link can supply metadata.
+- Admin photo upload, stored in Netlify Blobs. The browser resizes photos; the server validates, re-encodes as WebP, and strips metadata. No extra service account is needed.
 - Four starter products with official product/image sources. All start with zero votes.
 
 ## Publish using your browser
@@ -36,7 +38,9 @@ Signup displays a private recovery code once. **Forgot password?** accepts the u
 - Unique accounts prevent repeat clicks, not determined people creating multiple accounts. Rate limits reduce abuse but do not prove someone is a nail professional or a unique person.
 - Production deployment, Netlify database integration, secure cookies over HTTPS, admin setup, and a real cross-device vote must be checked on the live Netlify URL before inviting users.
 - Review branding, product-photo permissions, privacy notice, community moderation policy, and account deletion/data retention requirements before public promotion. Starter images are remote references from official product pages, not a claim of image licensing or endorsement.
-- Product photos currently use HTTPS image URLs. File uploads and email notifications are not implemented.
+- Product photos support HTTPS image URLs or JPEG/PNG/WebP uploads. Browser input limit: 15 MB, resized before upload; server input limit: 2 MB and 25 megapixels. Uploads are admin-only. Email notifications are not implemented.
+- Automatic lookup is best-effort: stores that require JavaScript or block automated requests (including some TikTok Shop pages) need manual details/photo upload. Amazon product-content import is not connected; keep Amazon affiliate purchase links and use permitted images or Amazon's approved content tools.
+- When an Amazon purchase link is marked affiliate, the site displays the Amazon Associate statement and a nearby commission disclosure. Register the live website in your Associates account and use your own properly generated affiliate links.
 - WebMCP product search is feature-detected. Browser support is optional and is not required for ordinary use.
 
 ## Official image sources
