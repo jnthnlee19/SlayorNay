@@ -15,6 +15,12 @@ function usernameInput(value){const name=clean(value,50).toLowerCase();if(!/^[a-
 function urlInput(value){const raw=clean(value,2000);if(!raw)return '';try{const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password)throw 0;return u.href;}catch{fail(400,'Product and image links must begin with https://.');}}
 function productInput(body){const image=typeof body.image==='string'&&/^\/api\/images\/[a-f0-9-]{36}\.webp$/.test(body.image)?body.image:urlInput(body.image);const p={name:clean(body.name,120),brand:clean(body.brand,80),category:clean(body.category,40),description:clean(body.description,1500),image,url:urlInput(body.url),affiliate:body.affiliate===true,active:body.active!==false};if(!p.name||!p.brand||!categories.includes(p.category))fail(400,'Add a product name, brand, and category.');return p;}
 const publicUser=u=>u?{id:u.id,username:u.username,is_admin:u.is_admin}:null;
+export function communityRating(p){
+ const verdict=p.total<10?'pending':p.slays/p.total>=.85?'grail':p.slays/p.total>=.5?'slay':'nay';
+ const ready=p.recent_total>=5&&p.previous_total>=5;
+ const change=ready?100*(p.recent_slays/p.recent_total-p.previous_slays/p.previous_total):null;
+ return {...p,verdict,trend:{direction:!ready?'pending':change>=5-1e-9?'up':change<=-5+1e-9?'down':'steady',change:ready?Math.round(change*10)/10:null}};
+}
 export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN,media,lookup=lookupProduct}){
  return async function handle(request,context={}){
   const url=new URL(request.url), path=url.pathname.replace(/^\/\.netlify\/functions\/api/,'').replace(/^\/api/,'')||'/';
@@ -50,7 +56,14 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     const sort=(a,b)=>b.slays/b.total-a.slays/a.total||b.total-a.total||a.id.localeCompare(b.id);
     const slay=daily.filter(p=>p.slays/p.total>.5).sort(sort)[0]||null;
     const nay=daily.filter(p=>p.slays/p.total<.5).sort((a,b)=>sort(b,a))[0]||null;
-    return json({products,daily:{slay,nay},minimum:10});
+    const recent=await rows(`SELECT product_id,
+     count(*) FILTER(WHERE created_at>=now()-interval '24 hours')::int AS recent_total,
+     count(*) FILTER(WHERE created_at>=now()-interval '24 hours' AND choice='slay')::int AS recent_slays,
+     count(*) FILTER(WHERE created_at<now()-interval '24 hours')::int AS previous_total,
+     count(*) FILTER(WHERE created_at<now()-interval '24 hours' AND choice='slay')::int AS previous_slays
+     FROM votes WHERE created_at>=now()-interval '48 hours' AND created_at<=now() GROUP BY product_id`);
+    const windows=new Map(recent.map(p=>[p.product_id,p]));
+    return json({products:products.map(p=>communityRating({...p,recent_total:0,recent_slays:0,previous_total:0,previous_slays:0,...windows.get(p.id)})),daily:{slay,nay},minimum:10});
    }
    if(request.method==='POST'&&['/signup','/signin','/recover'].includes(path)){
     const ip=clean(context.ip||'unknown',200);await rate('auth-ip:'+digest(ip),30,900);
