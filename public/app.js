@@ -69,12 +69,12 @@ $('#account-button').addEventListener('click',()=>{if(!state.user){auth();return
 document.addEventListener('input',e=>{if(e.target.id==='search'){state.search=e.target.value;$('#search-results').innerHTML=results();}});
 document.addEventListener('change',e=>{if(e.target.id==='sort'){state.sort=e.target.value;$('#search-results').innerHTML=results();}});
 document.addEventListener('submit',async e=>{
- const form=e.target;if(!['auth-form','submission-form','product-form','claim-form'].includes(form.id))return;e.preventDefault();const button=form.querySelector('button[type=submit],button:not([type])');button.disabled=true;const error=form.querySelector('.form-error');error.textContent='';const data=Object.fromEntries(new FormData(form));
+ const form=e.target;if(!['auth-form','submission-form','product-form','claim-form'].includes(form.getAttribute('id')))return;e.preventDefault();const button=form.querySelector('button[type=submit],button:not([type])');button.disabled=true;const error=form.querySelector('.form-error');error.textContent='';const data=Object.fromEntries(new FormData(form));
  try{
-  if(form.id==='auth-form'){const result=await api('/'+authMode,data);state.user=result.user;state.admin=null;await refresh();resetQueue();await render();if(result.recovery)recoveryModal(result.recovery);else{$('#modal').close();toast('You’re signed in. Pick a product and give it your verdict.');}}
-  if(form.id==='submission-form'){await api('/submissions',data);form.innerHTML='<div class="form-success"><h2>It’s on the list. ✓</h2><p>Your product is waiting for review. Thanks for putting it on our radar.</p><a class="text-button" href="#vote">Back to voting →</a></div>';}
-  if(form.id==='product-form'){if(form.dataset.mediaBusy)throw new Error('Wait for the photo or lookup to finish before saving.');await api('/admin/products',{...data,affiliate:data.affiliate==='true',active:data.active==='true'});$('#modal').close();state.admin=null;await refresh();resetQueue();await render();toast('Product saved.');}
-  if(form.id==='claim-form'){const result=await api('/admin/claim',data);state.user=result.user;state.admin=null;updateAccount();await render();toast('Your admin desk is ready.');}
+  if(form.getAttribute('id')==='auth-form'){const result=await api('/'+authMode,data);state.user=result.user;state.admin=null;await refresh();resetQueue();await render();if(result.recovery)recoveryModal(result.recovery);else{$('#modal').close();toast('You’re signed in. Pick a product and give it your verdict.');}}
+  if(form.getAttribute('id')==='submission-form'){await api('/submissions',data);form.innerHTML='<div class="form-success"><h2>It’s on the list. ✓</h2><p>Your product is waiting for review. Thanks for putting it on our radar.</p><a class="text-button" href="#vote">Back to voting →</a></div>';}
+  if(form.getAttribute('id')==='product-form'){if(form.dataset.mediaBusy)throw new Error('Wait for the photo or lookup to finish before saving.');await api('/admin/products',{...data,affiliate:data.affiliate==='true',active:data.active==='true'});$('#modal').close();state.admin=null;await refresh();resetQueue();await render();toast('Product saved.');}
+  if(form.getAttribute('id')==='claim-form'){const result=await api('/admin/claim',data);state.user=result.user;state.admin=null;updateAccount();await render();toast('Your admin desk is ready.');}
  }catch(err){error.textContent=err.message;}finally{button.disabled=false;}
 });
 window.addEventListener('hashchange',()=>{render();window.scrollTo({top:0});});
