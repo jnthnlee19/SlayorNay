@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, createHash, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
+import { lookupProduct, sanitizeImage } from './product-media.mjs';
 const scrypt = promisify(scryptCallback);
 const digest = s => createHash('sha256').update(s).digest('hex');
 const categories = ['Polish','Gel','Extensions','Tools','Prep & finish','Nail care'];
@@ -12,9 +13,9 @@ async function verify(password,encoded){const [salt,hash]=(encoded||'').split(':
 function passwordInput(value){if(typeof value!=='string'||value.length<12||value.length>128)fail(400,'Use a password between 12 and 128 characters.');return value;}
 function usernameInput(value){const name=clean(value,50).toLowerCase();if(!/^[a-z0-9_]{3,30}$/.test(name))fail(400,'Use 3–30 letters, numbers, or underscores for your username.');return name;}
 function urlInput(value){const raw=clean(value,2000);if(!raw)return '';try{const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password)throw 0;return u.href;}catch{fail(400,'Product and image links must begin with https://.');}}
-function productInput(body){const p={name:clean(body.name,120),brand:clean(body.brand,80),category:clean(body.category,40),description:clean(body.description,1500),image:urlInput(body.image),url:urlInput(body.url),affiliate:body.affiliate===true,active:body.active!==false};if(!p.name||!p.brand||!categories.includes(p.category))fail(400,'Add a product name, brand, and category.');return p;}
+function productInput(body){const image=typeof body.image==='string'&&/^\/api\/images\/[a-f0-9-]{36}\.webp$/.test(body.image)?body.image:urlInput(body.image);const p={name:clean(body.name,120),brand:clean(body.brand,80),category:clean(body.category,40),description:clean(body.description,1500),image,url:urlInput(body.url),affiliate:body.affiliate===true,active:body.active!==false};if(!p.name||!p.brand||!categories.includes(p.category))fail(400,'Add a product name, brand, and category.');return p;}
 const publicUser=u=>u?{id:u.id,username:u.username,is_admin:u.is_admin}:null;
-export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN}){
+export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN,media,lookup=lookupProduct}){
  return async function handle(request,context={}){
   const url=new URL(request.url), path=url.pathname.replace(/^\/\.netlify\/functions\/api/,'').replace(/^\/api/,'')||'/';
   const secure=!preview;const cookieName=secure?'__Host-son_session':'son_session';
@@ -26,12 +27,17 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
   const newSession=async(user)=>{const token=randomBytes(32).toString('hex');await rows("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '14 days')",[digest(token),user.id]);setCookie=`${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600${secure?'; Secure':''}`;};
   try{
    if(!['GET','POST'].includes(request.method))fail(405,'Method not allowed.');
+   if(request.method==='GET'&&/^\/images\/[a-f0-9-]{36}\.webp$/.test(path)){
+    const image=await media?.get(path.slice('/images/'.length));if(!image)fail(404,'Photo not found.');
+    return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});
+   }
    let body={};
    if(request.method==='POST'){
     if(request.headers.get('origin')!==url.origin)fail(403,'Please submit this from the website.');
     if(!request.headers.get('content-type')?.startsWith('application/json'))fail(415,'Expected a JSON request.');
-    if(Number(request.headers.get('content-length')||0)>20000)fail(413,'That submission is too large.');
-    const raw=await request.text();if(raw.length>20000)fail(413,'That submission is too large.');
+    const maxBody=path==='/admin/upload'?2900000:20000;
+    if(Number(request.headers.get('content-length')||0)>maxBody)fail(413,'That submission is too large.');
+    const reader=request.body?.getReader();let raw='',size=0;const decoder=new TextDecoder();if(reader){while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>maxBody){await reader.cancel();fail(413,'That submission is too large.');}raw+=decoder.decode(chunk.value,{stream:true});}raw+=decoder.decode();}
     try{body=JSON.parse(raw);}catch{fail(400,'Invalid request.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Invalid request.');
    }
    const user=rawToken?(await rows('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()',[digest(rawToken)]))[0]:null;
@@ -98,6 +104,11 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    if(path.startsWith('/admin/')){
     requireAdmin();
+    if(request.method==='POST'&&path==='/admin/lookup'){await rate('lookup:'+user.id,20,300);return json(await lookup(urlInput(body.url)));}
+    if(request.method==='POST'&&path==='/admin/upload'){
+     await rate('upload:'+user.id,50,86400);if(!media)fail(503,'Photo storage is not available right now.');
+     const image=await sanitizeImage(body.base64),key=randomUUID()+'.webp';await media.set(key,image);return json({image:'/api/images/'+key},201);
+    }
     if(request.method==='GET'&&path==='/admin/data')return json({products:await rows('SELECT * FROM products ORDER BY created_at DESC'),submissions:await rows("SELECT s.*,u.username FROM submissions s JOIN users u ON u.id=s.user_id WHERE s.status='pending' ORDER BY s.created_at")});
     if(request.method==='POST'&&path==='/admin/products'){
      const p=productInput(body);const id=clean(body.id,100)||randomUUID();
