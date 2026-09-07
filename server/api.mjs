@@ -104,9 +104,16 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     if(rawToken)await rows('DELETE FROM sessions WHERE token_hash=$1',[digest(rawToken)]);
     setCookie=`${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`;return json({ok:true});
    }
+   if(request.method==='POST'&&path==='/vote/change'){
+    requireUser();await rate('vote:'+user.id,120,60);
+    if(!['slay','nay'].includes(body.choice))fail(400,'Choose Gloss or Toss.');
+    const updated=await rows(`UPDATE votes v SET choice=$3,created_at=CASE WHEN v.choice<>$3 THEN NOW() ELSE v.created_at END FROM products p WHERE v.user_id=$1 AND v.product_id=$2 AND p.id=v.product_id AND p.active=true RETURNING v.product_id`,[user.id,clean(body.product_id,100),body.choice]);
+    if(!updated.length)fail(404,'No saved vote is available to change for this product.');
+    return json({ok:true});
+   }
    if(request.method==='POST'&&path==='/vote'){
     requireUser();await rate('vote:'+user.id,120,60);
-    if(!['slay','nay'].includes(body.choice))fail(400,'Choose Slay or Nay.');
+    if(!['slay','nay'].includes(body.choice))fail(400,'Choose Gloss or Toss.');
     const id=clean(body.product_id,100);
     const inserted=await rows(`INSERT INTO votes(user_id,product_id,choice) SELECT $1,p.id,$3 FROM products p WHERE p.id=$2 AND p.active=true ON CONFLICT(user_id,product_id) DO NOTHING RETURNING *`,[user.id,id,body.choice]);
     if(!inserted.length){const p=await rows('SELECT id FROM products WHERE id=$1 AND active=true',[id]);if(!p.length)fail(404,'This product is no longer available.');fail(409,'Your vote for this product is already saved.');}
