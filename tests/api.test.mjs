@@ -82,3 +82,15 @@ test('deletion is admin-only and removes product votes; category moves preserve 
  const gone=await owner.call('/admin/delete-products',{ids:[a]});assert.equal(gone.status,200);assert.deepEqual(gone.data.deleted,[a]);assert.equal((await db.query('SELECT * FROM products WHERE id=$1',[a])).rows.length,0);assert.equal((await db.query('SELECT * FROM votes WHERE product_id=$1',[a])).rows.length,0);assert.equal((await voter.call('/vote',{product_id:a,choice:'nay'})).status,404);
  assert.equal((await owner.call('/admin/delete-products',{ids:[]})).status,400);
 });
+
+test('vote changes replace one owned vote, including concurrent retries',async()=>{
+ const user=client(),stranger=client();await user.call('/signup',{username:'vote_editor',password:'editor-password-123'});await stranger.call('/signup',{username:'vote_stranger',password:'stranger-password-123'});
+ const id='opi-big-apple-red';assert.equal((await user.call('/vote',{product_id:id,choice:'slay'})).status,201);
+ const before=(await user.call('/products')).data.products.find(p=>p.id===id);
+ assert.equal((await stranger.call('/vote/change',{product_id:id,choice:'nay'})).status,404);
+ assert.equal((await client().call('/vote/change',{product_id:id,choice:'nay'})).status,401);
+ const changes=await Promise.all(Array.from({length:6},()=>user.call('/vote/change',{product_id:id,choice:'nay'})));assert.ok(changes.every(x=>x.status===200));
+ const after=(await user.call('/products')).data.products.find(p=>p.id===id);assert.equal(after.total,before.total);assert.equal(after.slays,before.slays-1);assert.equal(after.my_vote,'nay');
+ assert.equal((await user.call('/vote/change',{product_id:id,choice:'slay'})).status,200);const restored=(await user.call('/products')).data.products.find(p=>p.id===id);assert.equal(restored.total,before.total);assert.equal(restored.slays,before.slays);
+ assert.equal((await user.call('/vote/change',{product_id:id,choice:'invalid'})).status,400);
+});
