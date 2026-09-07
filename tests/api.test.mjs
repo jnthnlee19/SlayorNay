@@ -65,3 +65,10 @@ test('expired sessions are rejected and repeated sign-in failures are limited',a
  let last;for(let i=0;i<35;i++)last=await anon.call('/signin',{username:'missing',password:'incorrect-password-123'});assert.equal(last.status,429);
 });
 test.after(async()=>db.close());
+test('admin can add a custom category and edit a product without replacing its votes',async()=>{
+ await db.query("DELETE FROM rate_limits"); const owner=client(),voter=client();await owner.call('/signup',{username:'categoryowner',password:'category-test-password'});await voter.call('/signup',{username:'categoryvoter',password:'category-test-password'});await db.query("UPDATE users SET is_admin=true WHERE username='categoryowner'");
+ const created=await owner.call('/admin/products',{name:'Custom category fixture',brand:'Fixture',category:'Nail art supplies'});assert.equal(created.status,200);
+ const id=created.data.id;assert.equal((await voter.call('/vote',{product_id:id,choice:'slay'})).status,201);
+ assert.equal((await owner.call('/admin/products',{id,name:'Renamed fixture',brand:'Fixture',category:'Storage & organizers',active:false})).status,200);
+ const row=(await db.query('SELECT * FROM products WHERE id=$1',[id])).rows[0];assert.equal(row.category,'Storage & organizers');assert.equal(row.active,false);assert.equal((await db.query('SELECT count(*)::int AS n FROM votes WHERE product_id=$1',[id])).rows[0].n,1);
+});
