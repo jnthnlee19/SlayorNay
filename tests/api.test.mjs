@@ -72,3 +72,13 @@ test('admin can add a custom category and edit a product without replacing its v
  assert.equal((await owner.call('/admin/products',{id,name:'Renamed fixture',brand:'Fixture',category:'Storage & organizers',active:false})).status,200);
  const row=(await db.query('SELECT * FROM products WHERE id=$1',[id])).rows[0];assert.equal(row.category,'Storage & organizers');assert.equal(row.active,false);assert.equal((await db.query('SELECT count(*)::int AS n FROM votes WHERE product_id=$1',[id])).rows[0].n,1);
 });
+test('deletion is admin-only and removes product votes; category moves preserve data',async()=>{
+ await db.query('DELETE FROM rate_limits');const owner=client(),voter=client();await owner.call('/signup',{username:'deleteowner',password:'deletion-test-password'});await voter.call('/signup',{username:'deletevoter',password:'deletion-test-password'});await db.query("UPDATE users SET is_admin=true WHERE username='deleteowner'");
+ const a=(await owner.call('/admin/products',{name:'Delete fixture',brand:'Fixture',category:'Delete category'})).data.id;
+ await voter.call('/vote',{product_id:a,choice:'slay'});
+ assert.equal((await voter.call('/admin/delete-products',{ids:[a]})).status,403);assert.equal((await anon.call('/admin/delete-products',{ids:[a]})).status,401);
+ assert.equal((await voter.call('/admin/category',{from:'Delete category',to:'Moved'})).status,403);
+ const move=await owner.call('/admin/category',{from:'Delete category',to:'Moved'});assert.equal(move.data.updated,1);assert.equal((await db.query('SELECT category FROM products WHERE id=$1',[a])).rows[0].category,'Moved');assert.equal((await db.query('SELECT count(*)::int n FROM votes WHERE product_id=$1',[a])).rows[0].n,1);
+ const gone=await owner.call('/admin/delete-products',{ids:[a]});assert.equal(gone.status,200);assert.deepEqual(gone.data.deleted,[a]);assert.equal((await db.query('SELECT * FROM products WHERE id=$1',[a])).rows.length,0);assert.equal((await db.query('SELECT * FROM votes WHERE product_id=$1',[a])).rows.length,0);assert.equal((await voter.call('/vote',{product_id:a,choice:'nay'})).status,404);
+ assert.equal((await owner.call('/admin/delete-products',{ids:[]})).status,400);
+});
