@@ -127,6 +127,15 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    if(path.startsWith('/admin/')){
     requireAdmin();
+    if(request.method==='POST'&&path==='/admin/delete-products'){
+     if(!Array.isArray(body.ids)||!body.ids.length||body.ids.length>100||body.ids.some(id=>typeof id!=='string'||id.length>100))fail(400,'Select between 1 and 100 products.');
+     const removed=await rows(`WITH removed_votes AS (DELETE FROM votes WHERE product_id=ANY($1::text[]) RETURNING product_id) DELETE FROM products WHERE id=ANY($1::text[]) AND (SELECT count(*) FROM removed_votes)>=0 RETURNING id`,[body.ids]);
+     return json({deleted:removed.map(p=>p.id)});
+    }
+    if(request.method==='POST'&&path==='/admin/category'){
+     const from=clean(body.from,40),to=clean(body.to,40);if(!from||!to||from===to)fail(400,'Choose a category and a different destination name.');
+     const changed=await rows('UPDATE products SET category=$2 WHERE category=$1 RETURNING id',[from,to]);return json({updated:changed.length});
+    }
     if(request.method==='GET'&&path==='/admin/users'){
      const search=clean(url.searchParams.get('search'),30),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
      return json({users:await rows(`SELECT u.id,u.username,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u WHERE strpos(u.username,$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
