@@ -1,8 +1,8 @@
-export function parseProductCSV(text){
+export function parseProductCSV(text,delimiter=','){
  if(text.length>1000000)throw new Error('Choose a CSV file smaller than 1 MB.');
  text=text.replace(/^\uFEFF/,'');const rows=[];let row=[],cell='',quoted=false,closed=false;
  for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'){if(text[i+1]==='"'){cell+='"';i++;}else{quoted=false;closed=true;}}else cell+=c;continue;}
- if(c==='"'){if(cell||closed)throw new Error('Invalid CSV quoting. Export the sheet as CSV again.');quoted=true;}else if(c===','||c==='\n'||c==='\r'){row.push(cell);cell='';closed=false;if(c!==','){if(c==='\r'&&text[i+1]==='\n')i++;if(row.some(x=>x.trim()))rows.push(row);row=[];}}else{if(closed)throw new Error('Unexpected text after a quoted cell.');cell+=c;}}
+ if(c==='"'){if(cell||closed)throw new Error('Invalid CSV quoting. Export the sheet as CSV again.');quoted=true;}else if(c===delimiter||c==='\n'||c==='\r'){row.push(cell);cell='';closed=false;if(c!==delimiter){if(c==='\r'&&text[i+1]==='\n')i++;if(row.some(x=>x.trim()))rows.push(row);row=[];}}else{if(closed)throw new Error('Unexpected text after a quoted cell.');cell+=c;}}
  if(quoted)throw new Error('A quoted cell is unfinished. Export the sheet as CSV again.');row.push(cell);if(row.some(x=>x.trim()))rows.push(row);
  const aliases={link:'url','purchase link':'url','image link':'image','product name':'name'};
  const headers=(rows.shift()||[]).map(x=>{const h=x.trim().toLowerCase();return aliases[h]||h;});
