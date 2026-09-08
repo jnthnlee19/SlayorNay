@@ -41,3 +41,5 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 
 #vote-card .product-stage>img{padding:0;object-fit:contain;object-position:center center}
 
+
+.wordmark{display:block;background:none;filter:none;line-height:0}.wordmark img{display:block;width:106px;height:106px;object-fit:contain;border-radius:8px}header{padding-top:8px;padding-bottom:8px}footer .wordmark img{width:100px;height:100px}.vote-symbol{width:29px!important;height:29px!important;object-fit:contain;flex:none;vertical-align:middle}.vote-actions button{gap:10px!important}@media(max-width:680px){.wordmark img{width:68px;height:68px}.vote-page header{padding-top:3px;padding-bottom:3px}.vote-symbol{width:25px!important;height:25px!important}}
