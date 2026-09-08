@@ -43,3 +43,13 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 
 
 .wordmark{display:block;background:none;filter:none;line-height:0}.wordmark img{display:block;width:106px;height:106px;object-fit:contain;border-radius:8px}header{padding-top:8px;padding-bottom:8px}footer .wordmark img{width:100px;height:100px}.vote-symbol{width:29px!important;height:29px!important;object-fit:contain;flex:none;vertical-align:middle}.vote-actions button{gap:10px!important}@media(max-width:680px){.wordmark img{width:68px;height:68px}.vote-page header{padding-top:3px;padding-bottom:3px}.vote-symbol{width:25px!important;height:25px!important}}
+
+/* Floating controls keep the photo visible behind the vote actions. */
+#vote-card .vote-info{background:none;padding-top:12px}
+#vote-card .vote-info>.brand{display:inline-block;background:#170e19b8;border-radius:6px;padding:4px 8px}
+#vote-card .product-title{align-items:center;margin:5px 0 12px;gap:10px}
+#vote-card .product-title h2{background:#170e19b8;border-radius:8px;padding:7px 10px;margin:0;font-size:20px}
+#vote-card .product-title .text-button{background:#170e19b8;border-radius:8px;padding:8px}
+#vote-card .swipe-hint{display:table;margin:8px auto 0!important;background:#170e19b8;border-radius:8px;padding:4px 8px}
+#vote-card .skip-row .text-button{background:#170e19b8;border-radius:8px;padding:5px 9px}
+@media(max-width:680px){#vote-card .product-title h2{font-size:18px}.focus-vote #vote-card .vote-info{padding-top:12px}}
