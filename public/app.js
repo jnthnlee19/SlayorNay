@@ -1,3 +1,4 @@
+document.documentElement.classList.toggle('native-shell',new URLSearchParams(location.search).get('native')==='ios');
 const voteSymbol=choice=>'<img class="vote-symbol" src="/'+(choice==='slay'?'gloss':'toss')+'-symbol.svg" alt="" aria-hidden="true">';
 import {parseProductCSV} from './csv-import.mjs';
 const $ = s => document.querySelector(s);
