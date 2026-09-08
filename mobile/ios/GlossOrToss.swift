@@ -37,7 +37,7 @@ struct MainView: View {
             HStack {
                 AsyncImage(url: URL(string: "https://slayornay-nails.netlify.app/logo.png")) { image in image.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(width: 64, height: 64).accessibilityLabel("Gloss or Toss")
                 Spacer()
-                Button { browser.webView.evaluateJavaScript("document.getElementById('account-button')?.click()") } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and sign in")
+
                 ShareLink(item: site) { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share Gloss or Toss")
             }.padding(.horizontal).padding(.vertical, 10)
             ZStack {
@@ -53,9 +53,10 @@ struct MainView: View {
                 }
             }
             HStack {
-                tab("Vote", "sparkles", "vote")
+                tab("The Vote", "house.fill", "vote")
                 tab("Explore", "magnifyingglass", "discover")
-                tab("My Votes", "heart", "my-votes")
+                tab("Submit", "plus.circle", "submit")
+                tab("Profile", "person.crop.circle", "profile")
             }.padding(.top, 10).padding(.bottom, 6).background(Color(white: 0.08))
         }.tint(Color(red: 0.95, green: 0.79, blue: 0.84))
     }
