@@ -35,7 +35,7 @@ struct MainView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Gloss or Toss").font(.system(.headline, design: .serif)).foregroundStyle(Color(red: 0.95, green: 0.79, blue: 0.84))
+                AsyncImage(url: URL(string: "https://slayornay-nails.netlify.app/logo.png")) { image in image.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(width: 64, height: 64).accessibilityLabel("Gloss or Toss")
                 Spacer()
                 Button { browser.webView.evaluateJavaScript("document.getElementById('account-button')?.click()") } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel("Account and sign in")
                 ShareLink(item: site) { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share Gloss or Toss")
