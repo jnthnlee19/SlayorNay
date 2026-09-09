@@ -3,11 +3,22 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import {createApi} from '../server/api.mjs';
+import {verifiedIdentityFromRequest} from '../server/identity.mjs';
+test('server validates the actual request cookie with Identity and rejects forged/unverified tokens',async()=>{
+ const request=new Request('https://glossortoss.com/api/me',{headers:{cookie:'other=x; nf_jwt=test-token'}});
+ const user=await verifiedIdentityFromRequest(request,async(url,options)=>{
+  assert.equal(url,'https://glossortoss.com/.netlify/identity/user');assert.equal(options.headers.Authorization,'Bearer test-token');
+  return Response.json({id:'trusted',email:'test@example.test',confirmed_at:'2026-09-08'});
+ });
+ assert.equal(user.id,'trusted');
+ assert.equal(await verifiedIdentityFromRequest(request,async()=>new Response('',{status:401})),null);
+ assert.equal(await verifiedIdentityFromRequest(request,async()=>Response.json({id:'unverified',email:'test@example.test'})),null);
+});
 test('verified identity linking preserves votes/admin and blocks takeover and legacy bypass',async()=>{
  const db=new PGlite();
  for(const file of ['202609060001_initial.sql','202609080001_email_identity.sql'])await db.exec(await readFile('netlify/database/migrations/'+file,'utf8'));
  const handle=createApi({query:async(s,p)=>(await db.query(s,p)).rows});
- const call=async(path,body,identityUser=null,cookie='',enabled=true,origin='https://example.test')=>{const r=await handle(new Request('https://example.test/api'+path,{headers:{origin,cookie,'content-type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})}),{emailIdentityEnabled:enabled,identityUser,ip:'test'});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};};
+ const call=async(path,body,identityUser=null,cookie='',enabled=true,origin='https://example.test')=>{const r=await handle(new Request('https://example.test/api'+path,{headers:{origin,cookie,'content-type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})}),{emailIdentityEnabled:enabled,identityUser,ip:'test',identityPasswordLogin:async(email,password)=>{assert.equal(email,'owner@example.test');assert.equal(password,'email-password-123');return {access_token:'access',refresh_token:'refresh'};}});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};};
  const old=await call('/signup',{username:'owner',password:'original-password-123'},null,'',false);
  await db.query('UPDATE users SET is_admin=true WHERE id=$1',[old.data.user.id]);
  await call('/vote',{product_id:'opi-top-coat',choice:'slay'},null,old.cookie,false);
@@ -22,6 +33,8 @@ test('verified identity linking preserves votes/admin and blocks takeover and le
  assert.equal(linked.data.user.id,old.data.user.id);assert.equal(linked.data.user.is_admin,true);
  assert.equal((await call('/me',null,null,old.cookie)).data.user,null);
  assert.equal((await call('/signin',{username:'owner',password:'original-password-123'})).status,400);
+ assert.equal((await call('/email-signin',{identifier:'OWNER',password:'email-password-123'})).status,200);
+ assert.equal((await call('/email-signin',{identifier:'owner@example.test',password:'email-password-123'})).status,200);
  assert.equal((await call('/identity/complete',{username:'owner',link:true,password:'original-password-123'},{...identity,id:'attacker'})).status,409);
  assert.equal((await call('/vote/change',{product_id:'opi-top-coat',choice:'nay'},identity)).status,200);
  assert.equal((await db.query('SELECT count(*)::int AS n FROM votes WHERE user_id=$1',[old.data.user.id])).rows[0].n,1);
