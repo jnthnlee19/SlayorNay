@@ -69,3 +69,4 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 #vote-card .vote-info{padding-bottom:10px}
 #vote-card .vote-info>.brand{padding:3px 8px}
 @media(max-width:680px){#vote-card .card-top-actions{top:54px;left:12px;right:12px}#vote-card .card-top-actions button{min-height:38px;font-size:12px;padding:7px 10px}#vote-card .vote-info{padding-left:12px;padding-right:12px;padding-bottom:8px}#vote-card .product-title h2{font-size:17px}}
+#vote-card .product-stage .verdict-badge{top:106px}@media(max-width:680px){#vote-card .product-stage .verdict-badge{top:100px;left:12px}}
