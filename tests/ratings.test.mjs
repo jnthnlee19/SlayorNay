@@ -14,6 +14,7 @@ test('trend requires both windows and a five point change',()=>{
 test('rolling windows exclude older votes and compare approval independently of all-time score',async()=>{
  const db=new PGlite();try{
  await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));
+await db.exec(await readFile('netlify/database/migrations/202609090002_watchlist.sql','utf8'));
  for(let i=0;i<16;i++){
  await db.query('INSERT INTO users(id,username,password_hash,recovery_hash) VALUES($1,$1,$2,$2)',['trend'+i,'unused']);
  await db.query("INSERT INTO votes(user_id,product_id,choice,created_at) VALUES($1,'opi-bubble-bath',$2,now()-$3*interval '1 hour')",['trend'+i,i<5?'slay':'nay',i<5?1:i<10?25:49]);

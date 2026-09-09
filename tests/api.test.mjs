@@ -5,6 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createApi } from '../server/api.mjs';
 const db=new PGlite();
 await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));
+await db.exec(await readFile('netlify/database/migrations/202609090002_watchlist.sql','utf8'));
 const adminToken='test-only-admin-setup-token-000000000000000';
 const handle=createApi({query:async(s,p)=>(await db.query(s,p)).rows,adminToken});
 function client(){let cookie='';return {get cookie(){return cookie;},async call(path,body,extra={}){const response=await handle(new Request('https://example.test/api'+path,{headers:{cookie,origin:'https://example.test','content-type':'application/json',...extra},...(body!==undefined?{method:'POST',body:JSON.stringify(body)}:{})}),{ip:'127.0.0.1'});const newCookie=response.headers.get('set-cookie');if(newCookie)cookie=newCookie.split(';')[0];return {status:response.status,data:await response.json(),headers:response.headers};}};}

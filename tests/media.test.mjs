@@ -30,6 +30,7 @@ test('uploads decode and re-encode real photos, reject disguised files',async()=
 });
 test('media endpoints require admin and uploaded photos can be saved and retrieved',async()=>{
  const db=new PGlite();await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));
+await db.exec(await readFile('netlify/database/migrations/202609090002_watchlist.sql','utf8'));
  const blobs=new Map();const handler=createApi({query:async(s,p)=>(await db.query(s,p)).rows,media:{set:async(k,v)=>blobs.set(k,v),get:async k=>blobs.get(k)},lookup:async()=>({name:'Test product',images:[]})});let cookie='';
  const call=async(path,body)=>{const response=await handler(new Request('https://example.test/api'+path,{headers:{cookie,origin:'https://example.test','content-type':'application/json'},...(body!==undefined?{method:'POST',body:JSON.stringify(body)}:{})}),{ip:'test'});if(response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];return response;};
  assert.equal((await call('/admin/lookup',{url:'https://example.com'})).status,401);

@@ -4,7 +4,8 @@ import {readFile} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import {createApi} from '../server/api.mjs';
 test('admin reset links are private, expiring, replaceable, single use and revoke sessions',async()=>{
- const db=new PGlite();try{await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));const handle=createApi({query:async(s,p)=>(await db.query(s,p)).rows,adminToken:'a'.repeat(30)});
+ const db=new PGlite();try{await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));
+await db.exec(await readFile('netlify/database/migrations/202609090002_watchlist.sql','utf8'));const handle=createApi({query:async(s,p)=>(await db.query(s,p)).rows,adminToken:'a'.repeat(30)});
  const client=()=>{let cookie='';return async(path,body)=>{const r=await handle(new Request('https://example.test/api'+path,{headers:{cookie,origin:'https://example.test','content-type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})}),{ip:'test'});if(r.headers.get('set-cookie'))cookie=r.headers.get('set-cookie').split(';')[0];return {status:r.status,data:await r.json()};};};
  const admin=client(),user=client(),anon=client();await admin('/signup',{username:'owner',password:'original-password'});await admin('/admin/claim',{token:'a'.repeat(30)});const account=await user('/signup',{username:'member',password:'original-password'});const id=account.data.user.id;
  assert.equal((await anon('/admin/users')).status,401);assert.equal((await user('/admin/users')).status,403);assert.equal((await user('/admin/reset-link',{user_id:id})).status,403);

@@ -16,7 +16,7 @@ test('server validates the actual request cookie with Identity and rejects forge
 });
 test('verified identity linking preserves votes/admin and blocks takeover and legacy bypass',async()=>{
  const db=new PGlite();
- for(const file of ['202609060001_initial.sql','202609080001_email_identity.sql'])await db.exec(await readFile('netlify/database/migrations/'+file,'utf8'));
+ for(const file of ['202609060001_initial.sql','202609080001_email_identity.sql','202609090002_watchlist.sql'])await db.exec(await readFile('netlify/database/migrations/'+file,'utf8'));
  const handle=createApi({query:async(s,p)=>(await db.query(s,p)).rows});
  const call=async(path,body,identityUser=null,cookie='',enabled=true,origin='https://example.test')=>{const r=await handle(new Request('https://example.test/api'+path,{headers:{origin,cookie,'content-type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})}),{emailIdentityEnabled:enabled,identityUser,ip:'test',identityPasswordLogin:async(email,password)=>{assert.equal(email,'owner@example.test');assert.equal(password,'email-password-123');return {access_token:'access',refresh_token:'refresh'};}});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};};
  const old=await call('/signup',{username:'owner',password:'original-password-123'},null,'',false);
