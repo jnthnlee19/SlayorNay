@@ -56,6 +56,30 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    const requireVoter=()=>{requireUser();if(context.emailIdentityEnabled&&!user.email_verified)fail(403,'Connect and verify your email in Profile before voting. Your previous votes are saved.');};
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
    if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:!!context.emailIdentityEnabled,needsProfile:!!verifiedIdentity&&!linked,identityEmail:verifiedIdentity?.email||null});
+   if(request.method==='POST'&&path==='/email-signin'){
+    await rate('email-login-ip:'+digest(context.ip||'unknown'),30,900);
+    const identifier=clean(body.identifier,254).toLowerCase();const password=passwordInput(body.password);
+    await rate('email-login-user:'+digest(identifier),12,900);
+    let email=identifier;
+    if(!identifier.includes('@')){
+     const account=(await rows('SELECT u.*,i.email FROM users u LEFT JOIN identity_links i ON i.user_id=u.id WHERE u.username=$1',[identifier]))[0];
+     if(!account?.email){
+      const valid=await verify(password,account?.password_hash||('0'.repeat(32)+':'+ '00'.repeat(64)));
+      if(!account||!valid)fail(401,'The username/email or password is incorrect.');
+      await newSession(account);const response=json({legacy:true});
+      for(const name of ['nf_jwt','nf_refresh'])response.headers.append('Set-Cookie',`${name}=; Path=/; Secure; SameSite=Lax; Max-Age=0`);
+      return response;
+     }
+     email=account.email;
+    }
+    if(!context.identityPasswordLogin)fail(503,'Email sign-in is temporarily unavailable.');
+    const tokens=await context.identityPasswordLogin(email,password);
+    if(!tokens.access_token||!tokens.refresh_token)fail(503,'Sign-in could not be completed.');
+    const response=json({ok:true});
+    // Same cookie contract as the Netlify browser client, which manages refresh.
+    for(const [name,value] of [['nf_jwt',tokens.access_token],['nf_refresh',tokens.refresh_token]])response.headers.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/; Secure; SameSite=Lax`);
+    return response;
+   }
    if(request.method==='POST'&&path==='/identity/complete'){
     if(!verifiedIdentity)fail(401,'Verify your email and sign in first.');
     await rate('identity-profile:'+verifiedIdentity.id,12,900);
