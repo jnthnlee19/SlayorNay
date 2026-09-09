@@ -14,7 +14,7 @@ function passwordInput(value){if(typeof value!=='string'||value.length<12||value
 function usernameInput(value){const name=clean(value,50).toLowerCase();if(!/^[a-z0-9_]{3,30}$/.test(name))fail(400,'Use 3–30 letters, numbers, or underscores for your username.');return name;}
 function urlInput(value){const raw=clean(value,2000);if(!raw)return '';try{const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password)throw 0;return u.href;}catch{fail(400,'Product and image links must begin with https://.');}}
 function productInput(body){const image=typeof body.image==='string'&&/^\/api\/images\/[a-f0-9-]{36}\.webp$/.test(body.image)?body.image:urlInput(body.image);const p={name:clean(body.name,120),brand:clean(body.brand,80),category:clean(body.category,40),description:clean(body.description,1500),image,url:urlInput(body.url),affiliate:body.affiliate===true,active:body.active!==false};if(!p.name||!p.brand||!p.category)fail(400,'Add a product name, brand, and category.');return p;}
-const publicUser=u=>u?{id:u.id,username:u.username,is_admin:u.is_admin}:null;
+const publicUser=u=>u?{id:u.id,username:u.username,is_admin:u.is_admin,email:u.email||null,email_verified:!!u.email_verified}:null;
 export function communityRating(p){
  const verdict=p.total<10?'pending':p.slays/p.total>=.85?'grail':p.slays/p.total>=.5?'slay':'nay';
  const ready=p.recent_total>=5&&p.previous_total>=5;
@@ -46,10 +46,34 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     const reader=request.body?.getReader();let raw='',size=0;const decoder=new TextDecoder();if(reader){while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>maxBody){await reader.cancel();fail(413,'That submission is too large.');}raw+=decoder.decode(chunk.value,{stream:true});}raw+=decoder.decode();}
     try{body=JSON.parse(raw);}catch{fail(400,'Invalid request.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Invalid request.');
    }
-   const user=rawToken?(await rows('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()',[digest(rawToken)]))[0]:null;
+   const legacyUser=rawToken?(await rows('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()',[digest(rawToken)]))[0]:null;
+   const identity=context.identityUser;
+   const verifiedIdentity=identity?.id&&identity?.email&&identity?.confirmedAt?identity:null;
+   const linked=verifiedIdentity?(await rows('SELECT u.* FROM users u JOIN identity_links i ON i.user_id=u.id WHERE i.identity_id=$1',[verifiedIdentity.id]))[0]:null;
+   let user=linked?{...linked,email:verifiedIdentity.email,email_verified:true}:identity?null:legacyUser;
+   if(context.emailIdentityEnabled&&user&&!linked&&(await rows('SELECT user_id FROM identity_links WHERE user_id=$1',[user.id])).length)user=null;
    const requireUser=()=>{if(!user)fail(401,'Sign in to continue.');};
+   const requireVoter=()=>{requireUser();if(context.emailIdentityEnabled&&!user.email_verified)fail(403,'Connect and verify your email in Profile before voting. Your previous votes are saved.');};
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
-   if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview});
+   if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:!!context.emailIdentityEnabled,needsProfile:!!verifiedIdentity&&!linked,identityEmail:verifiedIdentity?.email||null});
+   if(request.method==='POST'&&path==='/identity/complete'){
+    if(!verifiedIdentity)fail(401,'Verify your email and sign in first.');
+    await rate('identity-profile:'+verifiedIdentity.id,12,900);
+    if(linked)return json({user:publicUser(user)});
+    const username=usernameInput(body.username);
+    const existing=(await rows('SELECT * FROM users WHERE username=$1',[username]))[0];
+    if(existing){
+     if(!body.link)fail(409,'That username already exists. Choose “Connect existing account” to keep your votes.');
+     if(!await verify(passwordInput(body.password),existing.password_hash))fail(401,'Your existing username or password is incorrect.');
+     const inserted=await rows('INSERT INTO identity_links(identity_id,user_id,email) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING user_id',[verifiedIdentity.id,existing.id,verifiedIdentity.email]);
+     if(!inserted.length)fail(409,'This account is already connected to an email. Sign in with that email.');
+     await rows('DELETE FROM sessions WHERE user_id=$1',[existing.id]);
+     return json({user:publicUser({...existing,email:verifiedIdentity.email,email_verified:true})});
+    }
+    if(body.link)fail(401,'Your existing username or password is incorrect.');
+    const created=await rows(`WITH created AS (INSERT INTO users(id,username,password_hash,recovery_hash) VALUES($1,$2,'identity-only','identity-only') RETURNING *) , connected AS (INSERT INTO identity_links(identity_id,user_id,email) SELECT $3,id,$4 FROM created RETURNING user_id) SELECT created.* FROM created JOIN connected ON connected.user_id=created.id`,[randomUUID(),username,verifiedIdentity.id,verifiedIdentity.email]);
+    return json({user:publicUser({...created[0],email:verifiedIdentity.email,email_verified:true})},201);
+   }
    if(request.method==='POST'&&path==='/reset-password'){
     await rate('reset-ip:'+digest(context.ip||'unknown'),20,900);
     const token=clean(body.token,100);if(!/^[a-f0-9]{64}$/.test(token))fail(400,'This reset link is invalid or expired. Ask the administrator for a new one.');
@@ -76,6 +100,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     return json({products:products.map(p=>communityRating({...p,recent_total:0,recent_slays:0,previous_total:0,previous_slays:0,...windows.get(p.id)})),daily:{slay,nay},minimum:10});
    }
    if(request.method==='POST'&&['/signup','/signin','/recover'].includes(path)){
+    if(context.emailIdentityEnabled&&path==='/signup')fail(400,'Join with your email using the signup form.');
     const ip=clean(context.ip||'unknown',200);await rate('auth-ip:'+digest(ip),30,900);
     const username=usernameInput(body.username);await rate('auth-user:'+digest(username),12,900);
     const password=passwordInput(body.password);
@@ -86,6 +111,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      await newSession(inserted[0]);return json({user:publicUser(inserted[0]),recovery},201);
     }
     const existing=(await rows('SELECT * FROM users WHERE username=$1',[username]))[0];
+    if(context.emailIdentityEnabled&&existing&&(await rows('SELECT user_id FROM identity_links WHERE user_id=$1',[existing.id])).length)fail(400,'This account uses email sign-in now. Use your email or Forgot password.');
     if(path==='/recover'){
      const recovery=clean(body.recovery,100).toLowerCase();
      if(!existing||!safeEqual(digest(recovery),existing.recovery_hash))fail(401,'The username or recovery code is incorrect.');
@@ -105,14 +131,14 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     setCookie=`${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`;return json({ok:true});
    }
    if(request.method==='POST'&&path==='/vote/change'){
-    requireUser();await rate('vote:'+user.id,120,60);
+    requireVoter();await rate('vote:'+user.id,120,60);
     if(!['slay','nay'].includes(body.choice))fail(400,'Choose Gloss or Toss.');
     const updated=await rows(`UPDATE votes v SET choice=$3,created_at=CASE WHEN v.choice<>$3 THEN NOW() ELSE v.created_at END FROM products p WHERE v.user_id=$1 AND v.product_id=$2 AND p.id=v.product_id AND p.active=true RETURNING v.product_id`,[user.id,clean(body.product_id,100),body.choice]);
     if(!updated.length)fail(404,'No saved vote is available to change for this product.');
     return json({ok:true});
    }
    if(request.method==='POST'&&path==='/vote'){
-    requireUser();await rate('vote:'+user.id,120,60);
+    requireVoter();await rate('vote:'+user.id,120,60);
     if(!['slay','nay'].includes(body.choice))fail(400,'Choose Gloss or Toss.');
     const id=clean(body.product_id,100);
     const inserted=await rows(`INSERT INTO votes(user_id,product_id,choice) SELECT $1,p.id,$3 FROM products p WHERE p.id=$2 AND p.active=true ON CONFLICT(user_id,product_id) DO NOTHING RETURNING *`,[user.id,id,body.choice]);
@@ -149,6 +175,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }
     if(request.method==='POST'&&path==='/admin/reset-link'){
      await rate('admin-reset:'+user.id,30,3600);
+     if(context.emailIdentityEnabled&&(await rows('SELECT user_id FROM identity_links WHERE user_id=$1',[clean(body.user_id,100)])).length)fail(400,'This member uses email sign-in. They can choose Forgot password on the sign-in screen to receive a private reset email.');
      const target=(await rows('SELECT id,recovery_hash FROM users WHERE id=$1',[clean(body.user_id,100)]))[0];if(!target)fail(404,'User not found.');
      const token=randomBytes(32).toString('hex'),expires=new Date(Date.now()+30*60000).toISOString();
      await rows('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value',['password-reset:'+target.id,JSON.stringify({hash:digest(token),expires,recovery:target.recovery_hash})]);
