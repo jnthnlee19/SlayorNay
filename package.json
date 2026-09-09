@@ -14,11 +14,13 @@
   "dependencies": {
     "@netlify/blobs": "11.0.3",
     "@netlify/database": "2.0.1",
+    "@netlify/identity": "2.0.0",
     "cheerio": "1.2.0",
     "ipaddr.js": "2.5.0",
     "sharp": "0.35.4"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.2.17"
+    "@electric-sql/pglite": "0.2.17",
+    "esbuild-wasm": "0.28.2"
   }
 }
