@@ -109,6 +109,8 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     return json({ok:true,recovery});
    }
    if(request.method==='GET'&&path==='/products'){
+    const watched=user?await rows('SELECT product_id FROM watchlist WHERE user_id=$1',[user.id]):[];
+    const saved=new Set(watched.map(w=>w.product_id));
     const products=await rows(`SELECT p.*,count(v.user_id)::int AS total,count(v.user_id) FILTER(WHERE v.choice='slay')::int AS slays,max(CASE WHEN v.user_id=$1 THEN v.choice ELSE NULL END) AS my_vote FROM products p LEFT JOIN votes v ON v.product_id=p.id WHERE p.active=true GROUP BY p.id ORDER BY p.created_at,p.id`,[user?.id||'']);
     const daily=await rows(`SELECT p.id,count(*)::int AS total,count(*) FILTER(WHERE v.choice='slay')::int AS slays FROM products p JOIN votes v ON v.product_id=p.id WHERE p.active=true AND v.created_at >= (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-interval '1 day' AND v.created_at < (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') GROUP BY p.id HAVING count(*)>=10 ORDER BY p.id`);
     const sort=(a,b)=>b.slays/b.total-a.slays/a.total||b.total-a.total||a.id.localeCompare(b.id);
@@ -121,7 +123,17 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      count(*) FILTER(WHERE created_at<now()-interval '24 hours' AND choice='slay')::int AS previous_slays
      FROM votes WHERE created_at>=now()-interval '48 hours' AND created_at<=now() GROUP BY product_id`);
     const windows=new Map(recent.map(p=>[p.product_id,p]));
-    return json({products:products.map(p=>communityRating({...p,recent_total:0,recent_slays:0,previous_total:0,previous_slays:0,...windows.get(p.id)})),daily:{slay,nay},minimum:10});
+    return json({products:products.map(p=>communityRating({...p,watching:saved.has(p.id),recent_total:0,recent_slays:0,previous_total:0,previous_slays:0,...windows.get(p.id)})),daily:{slay,nay},minimum:10});
+   }
+   if(request.method==='POST'&&path==='/watchlist'){
+    requireUser();await rate('watchlist:'+user.id,120,60);
+    if(typeof body.watching!=='boolean')fail(400,'Choose whether to save or remove this product.');
+    const id=clean(body.product_id,100);
+    if(body.watching){
+     if(!(await rows('SELECT id FROM products WHERE id=$1 AND active=true',[id])).length)fail(404,'This product is no longer available.');
+     await rows('INSERT INTO watchlist(user_id,product_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[user.id,id]);
+    }else await rows('DELETE FROM watchlist WHERE user_id=$1 AND product_id=$2',[user.id,id]);
+    return json({watching:body.watching});
    }
    if(request.method==='POST'&&['/signup','/signin','/recover'].includes(path)){
     if(context.emailIdentityEnabled&&path==='/signup')fail(400,'Join with your email using the signup form.');
