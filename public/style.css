@@ -59,3 +59,13 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 .bottom-nav{display:none}.profile-link{display:inline-block;padding:13px 20px;border-radius:30px}.native-shell .bottom-nav{display:none!important}@media(max-width:680px){body{padding-bottom:85px}header nav{display:none!important}.bottom-nav{position:fixed;display:flex;bottom:0;left:0;right:0;z-index:8;background:#100d10f5;border-top:1px solid #503443;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));justify-content:space-around;gap:5px}.bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;color:#baaab4}.bottom-nav svg{width:24px;height:24px}.bottom-nav a[aria-current=page]{color:#f2cad6;text-decoration:none}.native-shell body{padding-bottom:0}.focus-vote #vote-card{height:calc(100dvh - 190px)}.native-shell .focus-vote #vote-card{height:calc(100dvh - 100px)!important}}
 
 .watch-button{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:8px 12px}.watch-button[aria-pressed="true"]{color:#f7b6ce;border-color:#c66a8a}.vote-info .watch-button{background:rgba(20,12,18,.65);color:#fff}.product-title{flex-wrap:wrap}
+
+/* Keep secondary actions above the image and the product label close to voting. */
+#vote-card .card-top-actions{position:absolute;top:58px;left:16px;right:16px;z-index:5;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+#vote-card .card-top-actions button{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 12px;background:#170e19b8;color:#fff;border:1px solid #ecd4e54d;border-radius:12px;font-size:13px;white-space:nowrap}
+#vote-card .card-top-actions .watch-button[aria-pressed="true"]{color:#ffd3e5;border-color:#c66a8a}
+#vote-card .product-title{display:block;margin:3px 0 6px}
+#vote-card .product-title h2{display:inline-block;padding:5px 8px;line-height:1.15}
+#vote-card .vote-info{padding-bottom:10px}
+#vote-card .vote-info>.brand{padding:3px 8px}
+@media(max-width:680px){#vote-card .card-top-actions{top:54px;left:12px;right:12px}#vote-card .card-top-actions button{min-height:38px;font-size:12px;padding:7px 10px}#vote-card .vote-info{padding-left:12px;padding-right:12px;padding-bottom:8px}#vote-card .product-title h2{font-size:17px}}
