@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, createHash, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { lookupProduct, sanitizeImage } from './product-media.mjs';
+import { lookupProduct, sanitizeImage, fetchSharePhoto, normalizeSharePhoto } from './product-media.mjs';
 const scrypt = promisify(scryptCallback);
 const digest = s => createHash('sha256').update(s).digest('hex');
 const categories = ['Polish','Gel','Extensions','Tools','Prep & finish','Nail care'];
@@ -21,7 +21,8 @@ export function communityRating(p){
  const change=ready?100*(p.recent_slays/p.recent_total-p.previous_slays/p.previous_total):null;
  return {...p,verdict,trend:{direction:!ready?'pending':change>=5-1e-9?'up':change<=-5+1e-9?'down':'steady',change:ready?Math.round(change*10)/10:null}};
 }
-export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN,media,lookup=lookupProduct}){
+export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN,media,lookup=lookupProduct,sharePhoto=fetchSharePhoto}){
+ const sharePhotoCache=new Map();
  return async function handle(request,context={}){
   const url=new URL(request.url), path=url.pathname.replace(/^\/\.netlify\/functions\/api/,'').replace(/^\/api/,'')||'/';
   const secure=!preview;const cookieName=secure?'__Host-son_session':'son_session';
@@ -33,6 +34,22 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
   const newSession=async(user)=>{const token=randomBytes(32).toString('hex');await rows("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '14 days')",[digest(token),user.id]);setCookie=`${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600${secure?'; Secure':''}`;};
   try{
    if(!['GET','POST'].includes(request.method))fail(405,'Method not allowed.');
+   if(request.method==='GET'&&path.startsWith('/share-photo/')){
+    const id=path.slice('/share-photo/'.length);
+    if(!/^[a-f0-9-]{36}$/.test(id))fail(404,'Product not found.');
+    const p=(await rows('SELECT image FROM products WHERE id=$1 AND active=true',[id]))[0];
+    if(!p?.image)fail(404,'Product photo unavailable.');
+    const key=digest(p.image),cached=sharePhotoCache.get(key);
+    let bytes=cached?.expires>Date.now()?cached.bytes:null;
+    if(!bytes){
+     await rate('share-photo:'+digest(context.ip||'unknown'),60,600);
+     const stored=p.image.match(/^\/api\/images\/([a-f0-9-]{36}\.webp)$/);
+     bytes=stored?await normalizeSharePhoto(await media?.get(stored[1])):await sharePhoto(p.image);
+     if(sharePhotoCache.size>=12)sharePhotoCache.delete(sharePhotoCache.keys().next().value);
+     sharePhotoCache.set(key,{bytes,expires:Date.now()+300000});
+    }
+    return new Response(bytes,{headers:{'Content-Type':'image/png','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}});
+   }
    if(request.method==='GET'&&/^\/images\/[a-f0-9-]{36}\.webp$/.test(path)){
     const image=await media?.get(path.slice('/images/'.length));if(!image)fail(404,'Photo not found.');
     return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});

@@ -14,7 +14,7 @@ export function pageUrl(value){
  if(url.protocol!=='https:'||url.username||url.password||(url.port&&url.port!=='443')||!host.includes('.')||host.endsWith('.')||/(^|\.)(localhost|local|internal|test|invalid)$/.test(host)||(isIP(host)&&!publicAddress(host)))throw error('Use a public HTTPS product page.',400);
  return url;
 }
-async function fetchPage(url,signal){
+async function fetchPage(url,signal,imageMode=false){
  const hostname=url.hostname.replace(/^\[|\]$/g,'');
  const addresses=isIP(hostname)?[{address:hostname,family:isIP(hostname)}]:await Promise.race([lookup(hostname,{all:true}),new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(error('The product page took too long to respond.')),{once:true}))]);
  if(signal.aborted)throw error('The product page took too long to respond.');
@@ -22,15 +22,31 @@ async function fetchPage(url,signal){
  const pinned=addresses[0];
  return new Promise((resolve,reject)=>{
   // Pin the connection to the validated address; no second DNS lookup/rebinding.
-  const req=request(url,{signal,headers:{'User-Agent':'SlayorNay-ProductPreview/1.0','Accept':'text/html,application/xhtml+xml','Accept-Encoding':'identity'},lookup:(_host,options,cb)=>options?.all?cb(null,[pinned]):cb(null,pinned.address,pinned.family)},res=>{
+  const req=request(url,{signal,headers:{'User-Agent':'SlayorNay-ProductPreview/1.0','Accept':imageMode?'image/avif,image/webp,image/png,image/jpeg':'text/html,application/xhtml+xml','Accept-Encoding':'identity'},lookup:(_host,options,cb)=>options?.all?cb(null,[pinned]):cb(null,pinned.address,pinned.family)},res=>{
    if([301,302,303,307,308].includes(res.statusCode)){res.destroy();resolve({redirect:res.headers.location});return;}
    if(res.statusCode!==200){res.destroy();reject(error('This store did not allow an automatic lookup. You can still enter details and upload a photo.'));return;}
-   if(!/text\/html|application\/xhtml\+xml/i.test(res.headers['content-type']||'')){res.destroy();reject(error('This link is not a product web page.'));return;}
+   if(!(imageMode?/^image\/(jpeg|png|webp|avif)/i:/text\/html|application\/xhtml\+xml/i).test(res.headers['content-type']||'')){res.destroy();reject(error('This link does not contain a supported image or page.'));return;}
    const chunks=[];let size=0;
-   res.on('data',chunk=>{size+=chunk.length;if(size>1500000){res.destroy(error('This page is too large to read. Try the brand’s direct product page or upload a photo.'));return;}chunks.push(chunk);});
-   res.on('end',()=>resolve({html:Buffer.concat(chunks).toString('utf8')}));res.on('error',reject);
+   res.on('data',chunk=>{size+=chunk.length;if(size>(imageMode?8000000:1500000)){res.destroy(error('This image or page is too large to read.'));return;}chunks.push(chunk);});
+   res.on('end',()=>resolve(imageMode?{bytes:Buffer.concat(chunks)}:{html:Buffer.concat(chunks).toString('utf8')}));res.on('error',reject);
   });req.on('error',reject);req.end();
  });
+}
+// Only called with an image URL already saved on an active catalog product.
+// Redirects repeat the public-address check and pin DNS at every connection.
+export async function fetchSharePhoto(value,{fetchImage=(url,signal)=>fetchPage(url,signal,true)}={}){
+ let url=pageUrl(value);const signal=AbortSignal.timeout(10000);
+ for(let hop=0;hop<5;hop++){
+  const response=await fetchImage(url,signal);
+  if(response.redirect){url=pageUrl(new URL(response.redirect,url).href);continue;}
+  return normalizeSharePhoto(response.bytes);
+ }
+ throw error('The product photo redirects too many times.');
+}
+export async function normalizeSharePhoto(bytes){
+ if(!bytes||bytes.byteLength>8000000)throw error('Product photo unavailable.');
+ try{return await sharp(bytes,{limitInputPixels:25000000,animated:false}).rotate().resize(1400,1400,{fit:'inside',withoutEnlargement:true}).png().toBuffer();}
+ catch{throw error('Product photo unavailable.');}
 }
 function imageUrl(value,base){if(typeof value!=='string'||!value.trim()||value.length>2000)return '';try{const u=pageUrl(new URL(value,base).href);return u.href;}catch{return '';}}
 export function extractDetails(html,base){
