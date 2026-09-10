@@ -39,7 +39,7 @@ export async function generateShareImage(product,{width=1080,height=1920}={}){
  ctx.strokeStyle='#c66a8a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(60,header+8);ctx.lineTo(1020,header+8);ctx.stroke();
  box(ctx,48,photoY,984,photoH,32,'#f3ecf0');
  if(photo){ctx.save();ctx.beginPath();ctx.roundRect(48,photoY,984,photoH,32);ctx.clip();contain(ctx,photo,60,photoY+12,960,photoH-24);ctx.restore();}
- else{ctx.textAlign='center';ctx.fillStyle='#735366';ctx.font='28px Arial';ctx.fillText('Product photo unavailable',540,photoY+photoH/2);}
+ else{contain(ctx,logo,140,photoY+40,800,photoH-140);ctx.textAlign='center';ctx.fillStyle='#735366';ctx.font='28px Arial';ctx.fillText('Real products. Your honest verdict.',540,photoY+photoH-45);}
  let y=H-footer+24;ctx.textAlign='center';ctx.fillStyle='#e6a1bc';ctx.font='bold 25px Arial';ctx.fillText(String(model.brand||'').toUpperCase().slice(0,55),540,y);
  ctx.font='bold 46px Georgia';ctx.fillStyle='#fff8fb';y+=54;for(const line of lines(ctx,model.name,920,2)){ctx.fillText(line,540,y);y+=53;}
  const pillY=y+8,pillH=92;const gloss=model.choice!=='nay';const gradient=ctx.createLinearGradient(140,pillY,940,pillY+pillH);gradient.addColorStop(0,gloss?'#e3a3bc':'#62565f');gradient.addColorStop(.55,gloss?'#a83764':'#141115');gradient.addColorStop(1,gloss?'#6c1e40':'#3d303c');
