@@ -1,0 +1,39 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {PGlite} from '@electric-sql/pglite';
+import sharp from 'sharp';
+import {createApi} from '../server/api.mjs';
+import {fetchSharePhoto} from '../server/product-media.mjs';
+import {shareModel,productShareUrl} from '../public/share-card.mjs';
+test('share model hides unvoted scores and uses the current saved choice',()=>{
+ const p={id:'abc',name:'Top Coat',brand:'Test',total:100,slays:84,my_vote:null};
+ assert.deepEqual([shareModel(p).percentage,shareModel(p).total],[null,null]);
+ assert.equal(shareModel({...p,my_vote:'slay'}).headline,'I GLOSSED IT');
+ assert.equal(shareModel({...p,my_vote:'nay'}).headline,'I TOSSED IT');
+ assert.equal(shareModel({...p,my_vote:'nay'}).percentage,84);
+ assert.equal(shareModel({...p,my_vote:'slay',total:0}).percentage,null);
+ assert.equal(productShareUrl('a/b'),'https://glossortoss.com/#product/a%2Fb');
+});
+test('share image fetch validates redirect destinations and normalizes pixels',async()=>{
+ let calls=0;await assert.rejects(fetchSharePhoto('https://example.com/image',{fetchImage:async()=>{calls++;return {redirect:'https://127.0.0.1/private'};}}));assert.equal(calls,1);
+ const png=await sharp({create:{width:32,height:48,channels:3,background:'pink'}}).png().toBuffer();
+ const image=await fetchSharePhoto('https://example.com/image',{fetchImage:async()=>({bytes:png})});
+ assert.equal((await sharp(image).metadata()).format,'png');
+ await assert.rejects(fetchSharePhoto('https://example.com/image',{fetchImage:async()=>({bytes:Buffer.from('not a photo')})}));
+});
+test('public share photos only use active catalog URLs and never alter votes',async()=>{
+ const db=new PGlite();await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));
+ const png=await sharp({create:{width:32,height:48,channels:3,background:'pink'}}).png().toBuffer();
+ const id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+ await db.query('INSERT INTO products(id,name,brand,category,image) VALUES($1,$2,$3,$4,$5)',[id,'Photo','Test','Test','https://example.com/photo.png']);
+ let calls=0;const api=createApi({query:async(s,p)=>(await db.query(s,p)).rows,sharePhoto:async url=>{assert.equal(url,'https://example.com/photo.png');calls++;return png;}});
+ const get=path=>api(new Request('https://example.test/api'+path),{ip:'share-test'});
+ let res=await get('/share-photo/'+id);assert.equal(res.status,200);assert.equal(res.headers.get('content-type'),'image/png');
+ assert.equal((await res.arrayBuffer()).byteLength,png.length);
+ await get('/share-photo/'+id);assert.equal(calls,1);
+ assert.equal((await get('/share-photo/https://private.test')).status,404);
+ await db.query('UPDATE products SET active=false WHERE id=$1',[id]);assert.equal((await get('/share-photo/'+id)).status,404);
+ assert.equal((await db.query('SELECT count(*)::int AS n FROM votes')).rows[0].n,0);
+ await db.close();
+});
