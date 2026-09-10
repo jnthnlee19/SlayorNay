@@ -7,11 +7,14 @@ export function shareModel(product){
   total:choice?total:null,percentage:choice&&total?Math.round(slays/total*100):null,
   headline:choice==='slay'?'I GLOSSED IT':choice==='nay'?'I TOSSED IT':'GLOSS OR TOSS?',url:productShareUrl(product.id)};
 }
-async function loadImage(src){
- const response=await fetch(src,{signal:AbortSignal.timeout(12000)});
- if(!response.ok)throw new Error('The product photo could not be loaded.');
- const blob=await response.blob(),url=URL.createObjectURL(blob);
- try{const image=new Image();image.src=url;await image.decode();return image;}finally{URL.revokeObjectURL(url);}
+function loadImage(src){
+ return new Promise((resolve,reject)=>{
+  const image=new Image();let timer;
+  image.onload=()=>{clearTimeout(timer);resolve(image);};
+  image.onerror=()=>{clearTimeout(timer);reject(new Error(src==='/logo.png'?'The Gloss or Toss logo could not be loaded. Please try again.':'The product photo could not be loaded.'));};
+  timer=setTimeout(()=>{image.onload=image.onerror=null;reject(new Error('The image took too long to load.'));},12000);
+  image.src=src;
+ });
 }
 function contain(ctx,image,x,y,w,h){const ratio=Math.min(w/image.width,h/image.height);ctx.drawImage(image,x+(w-image.width*ratio)/2,y+(h-image.height*ratio)/2,image.width*ratio,image.height*ratio);}
 function box(ctx,x,y,w,h,r,fill){ctx.fillStyle=fill;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
