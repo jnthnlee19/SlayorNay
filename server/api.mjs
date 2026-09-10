@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, createHash, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { lookupProduct, sanitizeImage, fetchSharePhoto, normalizeSharePhoto } from './product-media.mjs';
+import {PHOTO_CONSENT, PHOTO_CONSENT_VERSION} from '../public/photo-tools.mjs';
 const scrypt = promisify(scryptCallback);
 const digest = s => createHash('sha256').update(s).digest('hex');
 const categories = ['Polish','Gel','Extensions','Tools','Prep & finish','Nail care'];
@@ -58,7 +59,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    if(request.method==='POST'){
     if(request.headers.get('origin')!==url.origin)fail(403,'Please submit this from the website.');
     if(!request.headers.get('content-type')?.startsWith('application/json'))fail(415,'Expected a JSON request.');
-    const maxBody=path==='/admin/upload'?2900000:20000;
+    const maxBody=['/admin/upload','/submissions'].includes(path)?2900000:20000;
     if(Number(request.headers.get('content-length')||0)>maxBody)fail(413,'That submission is too large.');
     const reader=request.body?.getReader();let raw='',size=0;const decoder=new TextDecoder();if(reader){while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>maxBody){await reader.cancel();fail(413,'That submission is too large.');}raw+=decoder.decode(chunk.value,{stream:true});}raw+=decoder.decode();}
     try{body=JSON.parse(raw);}catch{fail(400,'Invalid request.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Invalid request.');
@@ -198,10 +199,29 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     if(!inserted.length){const p=await rows('SELECT id FROM products WHERE id=$1 AND active=true',[id]);if(!p.length)fail(404,'This product is no longer available.');fail(409,'Your vote for this product is already saved.');}
     return json({ok:true},201);
    }
+   if(request.method==='GET'&&path.startsWith('/submission-photo/')){
+    requireUser();const id=path.slice('/submission-photo/'.length);
+    const submission=(await rows('SELECT user_id,photo_key FROM submissions WHERE id=$1',[id]))[0];
+    if(!submission||(!user.is_admin&&submission.user_id!==user.id))fail(404,'Photo not found.');
+    const bytes=submission.photo_key?await media?.get(submission.photo_key):null;if(!bytes)fail(404,'Photo not found.');
+    return new Response(bytes,{headers:{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+   }
    if(request.method==='POST'&&path==='/submissions'){
-    requireUser();await rate('submit:'+user.id,10,86400);const p=productInput(body);
+    requireUser();await rate('submit:'+user.id,20,86400);
+    const target=clean(body.product_id,100);
+    const existing=target?(await rows('SELECT * FROM products WHERE id=$1 AND active=true',[target]))[0]:null;
+    if(target&&!existing)fail(404,'This product is no longer available.');
+    const p=existing||productInput({...body,image:''});
+    if(body.image)fail(400,'Upload your own photo instead of a website image link.');
     if(!['tech','brand'].includes(body.submitter_type))fail(400,'Tell us whether you are a nail tech or a brand.');
-    await rows('INSERT INTO submissions(id,user_id,name,brand,category,description,image,url,submitter_type) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[randomUUID(),user.id,p.name,p.brand,p.category,p.description,p.image,p.url,body.submitter_type]);return json({ok:true},201);
+    if(target&&!body.base64)fail(400,'Choose a photo to submit for this product.');
+    if(body.base64&&(body.photo_consent!==true||body.consent_version!==PHOTO_CONSENT_VERSION))fail(400,'Read and agree to the photo permission before submitting.');
+    const id=randomUUID();let key='';
+    if(body.base64){if(!media)fail(503,'Photo storage is unavailable.');const image=await sanitizeImage(body.base64);key='pending/'+id+'.webp';await media.set(key,image);}
+    await rows(`INSERT INTO submissions(id,user_id,name,brand,category,description,image,url,submitter_type,target_product_id,submission_kind,photo_key,original_filename,consent_text,consent_version,consent_at)
+      VALUES($1,$2,$3,$4,$5,$6,'',$7,$8,$9,$10,$11,$12,$13,$14,CASE WHEN $11<>'' THEN now() ELSE NULL END)`,
+      [id,user.id,p.name,p.brand,p.category,clean(body.description,1500),p.url,body.submitter_type,target||null,target?'photo':'product',key,key?clean(body.original_filename,200):'',key?PHOTO_CONSENT:'',key?PHOTO_CONSENT_VERSION:'']);
+    return json({ok:true,id},201);
    }
    if(request.method==='POST'&&path==='/admin/claim'){
     requireUser();await rate('claim:'+user.id,5,3600);
@@ -236,8 +256,15 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }
     if(request.method==='POST'&&path==='/admin/lookup'){await rate('lookup:'+user.id,20,300);return json(await lookup(urlInput(body.url)));}
     if(request.method==='POST'&&path==='/admin/upload'){
-     await rate('upload:'+user.id,50,86400);if(!media)fail(503,'Photo storage is not available right now.');
+     await rate('upload:'+user.id,200,86400);if(!media)fail(503,'Photo storage is not available right now.');
      const image=await sanitizeImage(body.base64),key=randomUUID()+'.webp';await media.set(key,image);return json({image:'/api/images/'+key},201);
+    }
+    if(request.method==='POST'&&path==='/admin/product-photo'){
+     const id=clean(body.id,100),image=clean(body.image,2000);
+     if(!/^\/api\/images\/[a-f0-9-]{36}\.webp$/.test(image))fail(400,'Upload a photo first.');
+     if(!await media?.get(image.slice('/api/images/'.length)))fail(400,'Uploaded photo not found.');
+     const updated=await rows('UPDATE products SET image=$2 WHERE id=$1 RETURNING id',[id,image]);
+     if(!updated.length)fail(404,'Product not found.');return json({ok:true});
     }
     if(request.method==='GET'&&path==='/admin/data')return json({products:await rows('SELECT * FROM products ORDER BY created_at DESC'),submissions:await rows("SELECT s.*,u.username FROM submissions s JOIN users u ON u.id=s.user_id WHERE s.status='pending' ORDER BY s.created_at")});
     if(request.method==='POST'&&path==='/admin/products'){
@@ -249,9 +276,22 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }
     if(request.method==='POST'&&path==='/admin/review'){
      const id=clean(body.id,100);if(!['approve','reject'].includes(body.action))fail(400,'Choose approve or reject.');
-     if(body.action==='reject'){const changed=await rows("UPDATE submissions SET status='rejected' WHERE id=$1 AND status='pending' RETURNING id",[id]);if(!changed.length)fail(409,'This submission has already been reviewed.');}
-     else{
-      const approved=await rows(`WITH reviewed AS (UPDATE submissions SET status='approved' WHERE id=$1 AND status='pending' RETURNING *) INSERT INTO products(id,name,brand,category,description,image,url) SELECT $2,name,brand,category,description,image,url FROM reviewed RETURNING id`,[id,randomUUID()]);
+     const submission=(await rows("SELECT * FROM submissions WHERE id=$1 AND status='pending'",[id]))[0];
+     if(!submission)fail(409,'This submission has already been reviewed.');
+     if(body.action==='reject'){
+      const changed=await rows("UPDATE submissions SET status='rejected',reviewed_at=now(),reviewed_by=$2 WHERE id=$1 AND status='pending' RETURNING id",[id,user.id]);
+      if(!changed.length)fail(409,'This submission has already been reviewed.');
+     }else{
+      if(submission.submission_kind==='photo'&&(!submission.target_product_id||!(await rows('SELECT id FROM products WHERE id=$1',[submission.target_product_id])).length))fail(409,'The original product was deleted. Decline this submission.');
+      let image='';
+      if(submission.photo_key){
+       if(!submission.consent_text||!submission.consent_at)fail(400,'Photo permission is missing.');
+       const bytes=await media?.get(submission.photo_key);if(!bytes)fail(404,'Submitted photo is unavailable.');
+       const key=randomUUID()+'.webp';await media.set(key,bytes);image='/api/images/'+key;
+      }
+      const approved=submission.submission_kind==='photo'
+       ?await rows(`WITH reviewed AS (UPDATE submissions SET status='approved',image=$2,reviewed_at=now(),reviewed_by=$3 WHERE id=$1 AND status='pending' RETURNING *) UPDATE products SET image=reviewed.image FROM reviewed WHERE products.id=reviewed.target_product_id RETURNING products.id`,[id,image,user.id])
+       :await rows(`WITH reviewed AS (UPDATE submissions SET status='approved',image=$3,reviewed_at=now(),reviewed_by=$4 WHERE id=$1 AND status='pending' RETURNING *) INSERT INTO products(id,name,brand,category,description,image,url) SELECT $2,name,brand,category,description,image,url FROM reviewed RETURNING id`,[id,randomUUID(),image,user.id]);
       if(!approved.length)fail(409,'This submission has already been reviewed.');
      }
      return json({ok:true});
