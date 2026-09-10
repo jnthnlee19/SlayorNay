@@ -266,3 +266,10 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 }
 #vote-card .product-stage .verdict-badge{bottom:auto}
 #vote-card .vote-actions .vote-symbol{width:25px!important;height:25px!important}
+
+/* Compact side icons for voting-card actions. */
+#vote-card .card-top-actions{top:64px;left:auto;right:12px;flex-direction:column;align-items:center;justify-content:flex-start;gap:10px;width:46px}
+#vote-card .card-top-actions button{box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:46px;height:46px;min-height:46px;padding:0;gap:0;border-radius:50%;font-size:0;background:#29252bb3;border:1px solid #ffffff45;color:#fff;backdrop-filter:blur(8px);text-decoration:none}
+#vote-card .card-top-actions button svg{width:22px;height:22px;flex-shrink:0}
+#vote-card .card-top-actions button:focus-visible{outline:3px solid #f4a5c6;outline-offset:3px}
+#vote-card .card-top-actions .watch-button[aria-pressed="true"]{background:#7b294dbf;color:#ffd3e5;border-color:#f4a5c6}
