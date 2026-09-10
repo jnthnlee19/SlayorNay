@@ -273,3 +273,14 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 #vote-card .card-top-actions button svg{width:22px;height:22px;flex-shrink:0}
 #vote-card .card-top-actions button:focus-visible{outline:3px solid #f4a5c6;outline-offset:3px}
 #vote-card .card-top-actions .watch-button[aria-pressed="true"]{background:#7b294dbf;color:#ffd3e5;border-color:#f4a5c6}
+
+/* Give product photos more clear space between compact overlays. */
+#vote-card .stage-tag{top:10px;padding:5px 8px;font-size:10px;letter-spacing:.7px;max-width:calc(100% - 90px)}
+#vote-card .stage-counter{top:10px;padding:5px 8px;font-size:10px}
+#vote-card .product-stage .verdict-badge{top:40px;padding:4px 7px;font-size:10px;max-width:calc(100% - 85px)}
+#vote-card .card-top-actions{top:44px;gap:8px}
+#vote-card .product-stage>img{position:absolute;top:35px;left:0;width:100%;height:calc(100% - 135px);padding:0;object-fit:contain;object-position:center}
+#vote-card .vote-info{padding:6px 12px 6px}
+#vote-card .skip-row{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:5px;flex-wrap:wrap}
+#vote-card .skip-row .swipe-hint{display:block;margin:0!important;padding:5px 6px;font-size:10px!important;line-height:1.2;white-space:nowrap}
+#vote-card .skip-row button{font-size:11px;padding:7px 6px;line-height:1.2;white-space:nowrap}
