@@ -1,3 +1,4 @@
+import {seedIdentity} from './email-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -25,9 +26,10 @@ test('image retirement preserves products and votes; photos stay private until a
  assert.equal((await db.query("SELECT count(*)::int n FROM products WHERE image<>''")).rows[0].n,0);
  assert.equal((await db.query('SELECT count(*)::int n FROM retired_product_images')).rows[0].n,4);
  assert.equal((await db.query('SELECT count(*)::int n FROM votes')).rows[0].n,1);
- for(const id of ['owner','member','other'])await db.query("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 day')",[createHash('sha256').update(id).digest('hex'),id]);
+ await db.exec(await readFile('netlify/database/migrations/202609080001_email_identity.sql','utf8'));
+ for(const id of ['owner','member','other'])await seedIdentity(db,id);
  const store=new Map(),api=createApi({query:async(s,p)=>(await db.query(s,p)).rows,preview:true,media:{set:async(k,v)=>store.set(k,v),get:async k=>store.get(k)}});
- const call=async(path,user,body)=>{const res=await api(new Request('https://example.test/api'+path,{method:body?'POST':'GET',headers:{origin:'https://example.test','content-type':'application/json',...(user?{cookie:'son_session='+user}:{})},...(body?{body:JSON.stringify(body)}:{})}),{ip:'test'});return res;};
+ const call=async(path,user,body)=>{const res=await api(new Request('https://example.test/api'+path,{method:body?'POST':'GET',headers:{origin:'https://example.test','content-type':'application/json',...(user?{cookie:'son_session='+user}:{})},...(body?{body:JSON.stringify(body)}:{})}),{ip:'test',identityUser:user?{id:user,email:user+'@example.test',confirmedAt:'2026-09-10'}:null});return res;};
  const base64=(await sharp({create:{width:20,height:30,channels:3,background:'pink'}}).png().toBuffer()).toString('base64');
  const data={product_id:'cnd-solaroil',submitter_type:'tech',base64,photo_consent:true,consent_version:PHOTO_CONSENT_VERSION,original_filename:'my-photo.png'};
  assert.equal((await call('/submissions',null,data)).status,401);
