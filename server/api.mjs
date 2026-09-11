@@ -65,6 +65,15 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    const requireVoter=requireUser;
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
    if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:true});
+   if(request.method==='GET'&&path==='/profile/stats'){
+    requireUser();
+    const stats=(await rows(`SELECT count(*)::int AS rated,
+     count(*) FILTER(WHERE choice='slay')::int AS gloss,
+     count(*) FILTER(WHERE choice='nay')::int AS toss,
+     (SELECT count(*)::int FROM watchlist WHERE user_id=$1) AS watchlist
+     FROM votes WHERE user_id=$1`,[user.id]))[0];
+    return json(stats);
+   }
    if(request.method==='POST'&&path==='/email-signin'){
     await rate('email-login-ip:'+digest(context.ip||'unknown'),30,900);
     const email=clean(body.email,254).toLowerCase(),password=passwordInput(body.password);
