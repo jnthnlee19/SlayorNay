@@ -1,18 +1,13 @@
-import { randomBytes, randomUUID, createHash, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
-import { promisify } from 'node:util';
+import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { lookupProduct, sanitizeImage, fetchSharePhoto, normalizeSharePhoto } from './product-media.mjs';
 import {PHOTO_CONSENT, PHOTO_CONSENT_VERSION} from '../public/photo-tools.mjs';
-const scrypt = promisify(scryptCallback);
 const digest = s => createHash('sha256').update(s).digest('hex');
 const categories = ['Polish','Gel','Extensions','Tools','Prep & finish','Nail care'];
 class HttpError extends Error { constructor(status,message){ super(message); this.status=status; } }
 const fail=(status,message)=>{throw new HttpError(status,message)};
 const clean=(value,max=200)=>typeof value==='string'?value.trim().slice(0,max):'';
 const safeEqual=(a,b)=>timingSafeEqual(Buffer.from(digest(a)),Buffer.from(digest(b)));
-export async function hashPassword(password){const salt=randomBytes(16).toString('hex');const hash=await scrypt(password,salt,64,{N:32768,r:8,p:1,maxmem:64*1024*1024});return salt+':'+hash.toString('hex');}
-async function verify(password,encoded){const [salt,hash]=(encoded||'').split(':');if(!salt||!hash)return false;const actual=await scrypt(password,salt,64,{N:32768,r:8,p:1,maxmem:64*1024*1024});return actual.length===Buffer.from(hash,'hex').length&&timingSafeEqual(actual,Buffer.from(hash,'hex'));}
-function passwordInput(value){if(typeof value!=='string'||value.length<12||value.length>128)fail(400,'Use a password between 12 and 128 characters.');return value;}
-function usernameInput(value){const name=clean(value,50).toLowerCase();if(!/^[a-z0-9_]{3,30}$/.test(name))fail(400,'Use 3–30 letters, numbers, or underscores for your username.');return name;}
+function passwordInput(value){if(typeof value!=='string'||value.length<8||value.length>128)fail(400,'Use a password between 8 and 128 characters.');return value;}
 function urlInput(value){const raw=clean(value,2000);if(!raw)return '';try{const u=new URL(raw);if(u.protocol!=='https:'||u.username||u.password)throw 0;return u.href;}catch{fail(400,'Product and image links must begin with https://.');}}
 function productInput(body){const image=typeof body.image==='string'&&/^\/api\/images\/[a-f0-9-]{36}\.webp$/.test(body.image)?body.image:urlInput(body.image);const p={name:clean(body.name,120),brand:clean(body.brand,80),category:clean(body.category,40),description:clean(body.description,1500),image,url:urlInput(body.url),affiliate:body.affiliate===true,active:body.active!==false};if(!p.name||!p.brand||!p.category)fail(400,'Add a product name, brand, and category.');return p;}
 const publicUser=u=>u?{id:u.id,username:u.username,is_admin:u.is_admin,email:u.email||null,email_verified:!!u.email_verified}:null;
@@ -31,8 +26,6 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
   const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...(setCookie?{'Set-Cookie':setCookie}:{})}});
   const rows=async(sql,args=[])=>query(sql,args);
   const rate=async(key,max,seconds)=>{const r=await rows(`INSERT INTO rate_limits(key,hits,expires_at) VALUES($1,1,now()+$2*interval '1 second') ON CONFLICT(key) DO UPDATE SET hits=CASE WHEN rate_limits.expires_at<now() THEN 1 ELSE rate_limits.hits+1 END, expires_at=CASE WHEN rate_limits.expires_at<now() THEN now()+$2*interval '1 second' ELSE rate_limits.expires_at END RETURNING hits`,[key,seconds]);if(r[0].hits>max)fail(429,'Too many attempts. Please try again in a little while.');};
-  const rawToken=(request.headers.get('cookie')||'').split(';').map(s=>s.trim()).find(s=>s.startsWith(cookieName+'='))?.slice(cookieName.length+1)||'';
-  const newSession=async(user)=>{const token=randomBytes(32).toString('hex');await rows("INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '14 days')",[digest(token),user.id]);setCookie=`${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=1209600${secure?'; Secure':''}`;};
   try{
    if(!['GET','POST'].includes(request.method))fail(405,'Method not allowed.');
    if(request.method==='GET'&&path.startsWith('/share-photo/')){
@@ -64,32 +57,19 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     const reader=request.body?.getReader();let raw='',size=0;const decoder=new TextDecoder();if(reader){while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>maxBody){await reader.cancel();fail(413,'That submission is too large.');}raw+=decoder.decode(chunk.value,{stream:true});}raw+=decoder.decode();}
     try{body=JSON.parse(raw);}catch{fail(400,'Invalid request.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Invalid request.');
    }
-   const legacyUser=rawToken?(await rows('SELECT u.* FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token_hash=$1 AND s.expires_at>now()',[digest(rawToken)]))[0]:null;
    const identity=context.identityUser;
    const verifiedIdentity=identity?.id&&identity?.email&&identity?.confirmedAt?identity:null;
    const linked=verifiedIdentity?(await rows('SELECT u.* FROM users u JOIN identity_links i ON i.user_id=u.id WHERE i.identity_id=$1',[verifiedIdentity.id]))[0]:null;
-   let user=linked?{...linked,email:verifiedIdentity.email,email_verified:true}:identity?null:legacyUser;
-   if(context.emailIdentityEnabled&&user&&!linked&&(await rows('SELECT user_id FROM identity_links WHERE user_id=$1',[user.id])).length)user=null;
-   const requireUser=()=>{if(!user)fail(401,'Sign in to continue.');};
-   const requireVoter=()=>{requireUser();if(context.emailIdentityEnabled&&!user.email_verified)fail(403,'Connect and verify your email in Profile before voting. Your previous votes are saved.');};
+   const user=linked?{...linked,email:verifiedIdentity.email,email_verified:true}:null;
+   const requireUser=()=>{if(!user)fail(401,'Sign in with a verified email to continue.');};
+   const requireVoter=requireUser;
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
-   if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:!!context.emailIdentityEnabled,needsProfile:!!verifiedIdentity&&!linked,identityEmail:verifiedIdentity?.email||null});
+   if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:true});
    if(request.method==='POST'&&path==='/email-signin'){
     await rate('email-login-ip:'+digest(context.ip||'unknown'),30,900);
-    const identifier=clean(body.identifier,254).toLowerCase();const password=passwordInput(body.password);
-    await rate('email-login-user:'+digest(identifier),12,900);
-    let email=identifier;
-    if(!identifier.includes('@')){
-     const account=(await rows('SELECT u.*,i.email FROM users u LEFT JOIN identity_links i ON i.user_id=u.id WHERE u.username=$1',[identifier]))[0];
-     if(!account?.email){
-      const valid=await verify(password,account?.password_hash||('0'.repeat(32)+':'+ '00'.repeat(64)));
-      if(!account||!valid)fail(401,'The username/email or password is incorrect.');
-      await newSession(account);const response=json({legacy:true});
-      for(const name of ['nf_jwt','nf_refresh'])response.headers.append('Set-Cookie',`${name}=; Path=/; Secure; SameSite=Lax; Max-Age=0`);
-      return response;
-     }
-     email=account.email;
-    }
+    const email=clean(body.email,254).toLowerCase(),password=passwordInput(body.password);
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail(400,'Enter your email address.');
+    await rate('email-login-user:'+digest(email),12,900);
     if(!context.identityPasswordLogin)fail(503,'Email sign-in is temporarily unavailable.');
     const tokens=await context.identityPasswordLogin(email,password);
     if(!tokens.access_token||!tokens.refresh_token)fail(503,'Sign-in could not be completed.');
@@ -98,33 +78,25 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     for(const [name,value] of [['nf_jwt',tokens.access_token],['nf_refresh',tokens.refresh_token]])response.headers.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/; Secure; SameSite=Lax`);
     return response;
    }
-   if(request.method==='POST'&&path==='/identity/complete'){
+   if(request.method==='POST'&&path==='/identity/session'){
     if(!verifiedIdentity)fail(401,'Verify your email and sign in first.');
-    await rate('identity-profile:'+verifiedIdentity.id,12,900);
-    if(linked)return json({user:publicUser(user)});
-    const username=usernameInput(body.username);
-    const existing=(await rows('SELECT * FROM users WHERE username=$1',[username]))[0];
-    if(existing){
-     if(!body.link)fail(409,'That username already exists. Choose “Connect existing account” to keep your votes.');
-     if(!await verify(passwordInput(body.password),existing.password_hash))fail(401,'Your existing username or password is incorrect.');
-     const inserted=await rows('INSERT INTO identity_links(identity_id,user_id,email) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING user_id',[verifiedIdentity.id,existing.id,verifiedIdentity.email]);
-     if(!inserted.length)fail(409,'This account is already connected to an email. Sign in with that email.');
-     await rows('DELETE FROM sessions WHERE user_id=$1',[existing.id]);
-     return json({user:publicUser({...existing,email:verifiedIdentity.email,email_verified:true})});
+    await rate('identity-profile:'+verifiedIdentity.id,30,900);
+    if(linked){
+     await rows('UPDATE identity_links SET email=$2 WHERE identity_id=$1',[verifiedIdentity.id,verifiedIdentity.email]);
+     return json({user:publicUser(user)});
     }
-    if(body.link)fail(401,'Your existing username or password is incorrect.');
-    const created=await rows(`WITH created AS (INSERT INTO users(id,username,password_hash,recovery_hash) VALUES($1,$2,'identity-only','identity-only') RETURNING *) , connected AS (INSERT INTO identity_links(identity_id,user_id,email) SELECT $3,id,$4 FROM created RETURNING user_id) SELECT created.* FROM created JOIN connected ON connected.user_id=created.id`,[randomUUID(),username,verifiedIdentity.id,verifiedIdentity.email]);
+    // A stable provider ID makes concurrent first sign-ins idempotent. Never match
+    // by an email or a user-supplied username: existing links retain their owner.
+    const id='identity:'+verifiedIdentity.id,username='member_'+digest(verifiedIdentity.id).slice(0,23);
+    const created=await rows(`WITH created AS (
+     INSERT INTO users(id,username,password_hash,recovery_hash) VALUES($1,$2,'identity-only','identity-only')
+     ON CONFLICT(id) DO UPDATE SET id=users.id RETURNING *
+    ), connected AS (
+     INSERT INTO identity_links(identity_id,user_id,email) SELECT $3,id,$4 FROM created
+     ON CONFLICT(identity_id) DO UPDATE SET email=EXCLUDED.email RETURNING user_id
+    ) SELECT created.* FROM created JOIN connected ON connected.user_id=created.id`,[id,username,verifiedIdentity.id,verifiedIdentity.email]);
+    if(!created[0])fail(409,'Please sign in again to finish loading your account.');
     return json({user:publicUser({...created[0],email:verifiedIdentity.email,email_verified:true})},201);
-   }
-   if(request.method==='POST'&&path==='/reset-password'){
-    await rate('reset-ip:'+digest(context.ip||'unknown'),20,900);
-    const token=clean(body.token,100);if(!/^[a-f0-9]{64}$/.test(token))fail(400,'This reset link is invalid or expired. Ask the administrator for a new one.');
-    const password=await hashPassword(passwordInput(body.password)),recovery=randomBytes(20).toString('hex');
-    const changed=await rows(`WITH consumed AS (
-     DELETE FROM settings WHERE CASE WHEN key LIKE 'password-reset:%' THEN value::jsonb->>'hash'=$1 AND (value::jsonb->>'expires')::timestamptz>now() ELSE false END RETURNING substring(key from 16) AS user_id,value::jsonb->>'recovery' AS recovery
-    ), updated AS (UPDATE users SET password_hash=$2,recovery_hash=$3 WHERE id=(SELECT user_id FROM consumed) AND recovery_hash=(SELECT recovery FROM consumed) RETURNING id), revoked AS (DELETE FROM sessions WHERE user_id IN (SELECT id FROM updated)) SELECT id FROM updated`,[digest(token),password,digest(recovery)]);
-    if(!changed.length)fail(400,'This reset link is invalid or expired. Ask the administrator for a new one.');
-    return json({ok:true,recovery});
    }
    if(request.method==='GET'&&path==='/products'){
     const watched=user?await rows('SELECT product_id FROM watchlist WHERE user_id=$1',[user.id]):[];
@@ -153,36 +125,10 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }else await rows('DELETE FROM watchlist WHERE user_id=$1 AND product_id=$2',[user.id,id]);
     return json({watching:body.watching});
    }
-   if(request.method==='POST'&&['/signup','/signin','/recover'].includes(path)){
-    if(context.emailIdentityEnabled&&path==='/signup')fail(400,'Join with your email using the signup form.');
-    const ip=clean(context.ip||'unknown',200);await rate('auth-ip:'+digest(ip),30,900);
-    const username=usernameInput(body.username);await rate('auth-user:'+digest(username),12,900);
-    const password=passwordInput(body.password);
-    if(path==='/signup'){
-     const recovery=randomBytes(20).toString('hex');const id=randomUUID();
-     const inserted=await rows('INSERT INTO users(id,username,password_hash,recovery_hash) VALUES($1,$2,$3,$4) ON CONFLICT(username) DO NOTHING RETURNING *',[id,username,await hashPassword(password),digest(recovery)]);
-     if(!inserted.length)fail(409,'That username is already taken. Try another or sign in.');
-     await newSession(inserted[0]);return json({user:publicUser(inserted[0]),recovery},201);
-    }
-    const existing=(await rows('SELECT * FROM users WHERE username=$1',[username]))[0];
-    if(context.emailIdentityEnabled&&existing&&(await rows('SELECT user_id FROM identity_links WHERE user_id=$1',[existing.id])).length)fail(400,'This account uses email sign-in now. Use your email or Forgot password.');
-    if(path==='/recover'){
-     const recovery=clean(body.recovery,100).toLowerCase();
-     if(!existing||!safeEqual(digest(recovery),existing.recovery_hash))fail(401,'The username or recovery code is incorrect.');
-     const replacement=randomBytes(20).toString('hex');
-     const updated=await rows('UPDATE users SET password_hash=$1,recovery_hash=$2 WHERE id=$3 AND recovery_hash=$4 RETURNING *',[await hashPassword(password),digest(replacement),existing.id,existing.recovery_hash]);
-     if(!updated.length)fail(409,'That recovery code was already used.');
-     await rows('DELETE FROM sessions WHERE user_id=$1',[existing.id]);await newSession(updated[0]);return json({user:publicUser(updated[0]),recovery:replacement});
-    }
-    // Run the same expensive password operation even when a username does not exist.
-    const dummy='00000000000000000000000000000000:'+ '00'.repeat(64);
-    const valid=await verify(password,existing?.password_hash||dummy);
-    if(!existing||!valid)fail(401,'The username or password is incorrect.');
-    await newSession(existing);return json({user:publicUser(existing)});
-   }
    if(request.method==='POST'&&path==='/signout'){
-    if(rawToken)await rows('DELETE FROM sessions WHERE token_hash=$1',[digest(rawToken)]);
-    setCookie=`${cookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`;return json({ok:true});
+    const response=json({ok:true});
+    for(const name of [cookieName,'nf_jwt','nf_refresh'])response.headers.append('Set-Cookie',`${name}=; Path=/; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`);
+    return response;
    }
    if(request.method==='POST'&&path==='/vote/change'){
     requireVoter();await rate('vote:'+user.id,120,60);
@@ -243,16 +189,8 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      const changed=await rows('UPDATE products SET category=$2 WHERE category=$1 RETURNING id',[from,to]);return json({updated:changed.length});
     }
     if(request.method==='GET'&&path==='/admin/users'){
-     const search=clean(url.searchParams.get('search'),30),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
-     return json({users:await rows(`SELECT u.id,u.username,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u WHERE strpos(u.username,$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
-    }
-    if(request.method==='POST'&&path==='/admin/reset-link'){
-     await rate('admin-reset:'+user.id,30,3600);
-     if(context.emailIdentityEnabled&&(await rows('SELECT user_id FROM identity_links WHERE user_id=$1',[clean(body.user_id,100)])).length)fail(400,'This member uses email sign-in. They can choose Forgot password on the sign-in screen to receive a private reset email.');
-     const target=(await rows('SELECT id,recovery_hash FROM users WHERE id=$1',[clean(body.user_id,100)]))[0];if(!target)fail(404,'User not found.');
-     const token=randomBytes(32).toString('hex'),expires=new Date(Date.now()+30*60000).toISOString();
-     await rows('INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value',['password-reset:'+target.id,JSON.stringify({hash:digest(token),expires,recovery:target.recovery_hash})]);
-     return json({link:url.origin+'/#reset-password?token='+token,expires});
+     const search=clean(url.searchParams.get('search'),254),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
+     return json({users:await rows(`SELECT u.id,u.username,i.email,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u JOIN identity_links i ON i.user_id=u.id WHERE strpos(lower(u.username),$1)>0 OR strpos(lower(i.email),$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
     }
     if(request.method==='POST'&&path==='/admin/lookup'){await rate('lookup:'+user.id,20,300);return json(await lookup(urlInput(body.url)));}
     if(request.method==='POST'&&path==='/admin/upload'){
@@ -266,7 +204,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      const updated=await rows('UPDATE products SET image=$2 WHERE id=$1 RETURNING id',[id,image]);
      if(!updated.length)fail(404,'Product not found.');return json({ok:true});
     }
-    if(request.method==='GET'&&path==='/admin/data')return json({products:await rows('SELECT * FROM products ORDER BY created_at DESC'),submissions:await rows("SELECT s.*,u.username FROM submissions s JOIN users u ON u.id=s.user_id WHERE s.status='pending' ORDER BY s.created_at")});
+    if(request.method==='GET'&&path==='/admin/data')return json({products:await rows('SELECT * FROM products ORDER BY created_at DESC'),submissions:await rows("SELECT s.*,COALESCE(u.username,'Deleted account') AS username FROM submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='pending' ORDER BY s.created_at")});
     if(request.method==='POST'&&path==='/admin/products'){
      const p=productInput(body);const id=clean(body.id,100)||randomUUID();
      const found=await rows('SELECT id FROM products WHERE id=$1',[id]);
@@ -299,7 +237,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    fail(404,'This page could not be found.');
   }catch(error){
-   if(error.status)return json({error:error.message},error.status);
+   if(error.status)return json({error:error.message,...(error.code?{code:error.code}:{})},error.status);
    if(error.code==='23505')return json({error:'This brand and product already exist. Edit the existing product instead.'},409);
    console.error('API failure',error.code||error.name);return json({error:'The service is not ready right now. Please try again shortly.'},503);
   }
