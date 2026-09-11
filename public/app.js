@@ -214,7 +214,7 @@ async function emailSignedIn(message='Signed in. Your votes are ready.'){
  await api('/identity/session',{});
  await init(true);
  if(!state.user)throw new Error('Your session could not be confirmed. Please sign in again.');
- verificationAttempt=null;$('#modal').close();location.hash='profile';await render();toast(message);
+ verificationAttempt=null;$('#modal').close();location.hash='vote';await render();toast(message);
 }
 async function processEmailCallback(){
  const params=new URLSearchParams(location.hash.slice(1));
