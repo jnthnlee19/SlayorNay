@@ -110,7 +110,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    if(request.method==='GET'&&path==='/products'){
     const watched=user?await rows('SELECT product_id FROM watchlist WHERE user_id=$1',[user.id]):[];
     const saved=new Set(watched.map(w=>w.product_id));
-    const products=await rows(`SELECT p.*,count(v.user_id)::int AS total,count(v.user_id) FILTER(WHERE v.choice='slay')::int AS slays,max(CASE WHEN v.user_id=$1 THEN v.choice ELSE NULL END) AS my_vote FROM products p LEFT JOIN votes v ON v.product_id=p.id WHERE p.active=true GROUP BY p.id ORDER BY p.created_at,p.id`,[user?.id||'']);
+    const products=await rows(`SELECT p.*,COALESCE(w.watchlist_count,0)::int AS watchlist_count,count(v.user_id)::int AS total,count(v.user_id) FILTER(WHERE v.choice='slay')::int AS slays,max(CASE WHEN v.user_id=$1 THEN v.choice ELSE NULL END) AS my_vote FROM products p LEFT JOIN votes v ON v.product_id=p.id LEFT JOIN (SELECT product_id,count(*)::int AS watchlist_count FROM watchlist GROUP BY product_id) w ON w.product_id=p.id WHERE p.active=true GROUP BY p.id,w.watchlist_count ORDER BY p.created_at,p.id`,[user?.id||'']);
     const daily=await rows(`SELECT p.id,count(*)::int AS total,count(*) FILTER(WHERE v.choice='slay')::int AS slays FROM products p JOIN votes v ON v.product_id=p.id WHERE p.active=true AND v.created_at >= (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')-interval '1 day' AND v.created_at < (date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') GROUP BY p.id HAVING count(*)>=10 ORDER BY p.id`);
     const sort=(a,b)=>b.slays/b.total-a.slays/a.total||b.total-a.total||a.id.localeCompare(b.id);
     const slay=daily.filter(p=>p.slays/p.total>.5).sort(sort)[0]||null;
