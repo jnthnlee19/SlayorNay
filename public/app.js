@@ -478,7 +478,8 @@ window.addEventListener('pageshow',e=>{if(e.persisted)init();});
 function reviewSubmission(id){
  const item=state.admin?.submissions.find(s=>s.id===id);if(!item)return;
  const isPhoto=item.submission_kind==='photo',hasPhoto=item.edited_photo_key||item.photo_key;
- openModal(`<h2 id="modal-title">Review ${isPhoto?'product photo':'submission'}</h2><p>From ${esc(item.username)}${isPhoto?' · Approval replaces the existing product photo only.':''}</p><form id="review-form" data-id="${esc(item.id)}">${fields(item).replace(/<label>Product photo[\s\S]*?<\/label>/,'')}<div class="review-photo-preview">${hasPhoto?`<img class="submission-review-photo" src="/api/submission-photo/${encodeURIComponent(item.id)}?edited=1" alt="Photo being reviewed">`:'<p>No photo submitted.</p>'}</div>${item.photo_key?`<a href="/api/submission-photo/${encodeURIComponent(item.id)}?download=1" download="product-photo.webp">Download original photo ↓</a>`:''}${item.edited_photo_key?`<p><a href="/api/submission-photo/${encodeURIComponent(item.id)}?edited=1&download=1" download="edited-product-photo.webp">Download edited photo ↓</a></p>`:''}<label>Add / replace review photo<input type="file" name="review_photo" accept="image/jpeg,image/png,image/webp" data-review-photo></label><p class="form-note">Upload an edit of the submitted photo, or your own approved photo. The original and its permission record are kept.</p>${item.photo_key?`<details><summary>Original photo permission</summary><p>${esc(item.consent_text)}</p><p>${esc(item.original_filename)} · ${esc(item.consent_version)}</p></details>`:''}<p class="form-error" role="alert"></p><div class="actions"><button type="submit" name="decision" value="save">Save edits</button><button type="submit" name="decision" value="approve" class="pink">Approve & publish</button><button type="button" data-review-deny class="admin-destructive">Decline submission</button></div></form>`);
+ openModal(`<h2 id="modal-title">Review ${isPhoto?'product photo':'submission'}</h2><p>From ${esc(item.username)}${isPhoto?' · Approval replaces the existing product photo only.':''}</p><form id="review-form" data-id="${esc(item.id)}">${fields(item).replace(/<label>Product photo[\s\S]*?<\/label>/,'')}<div class="review-photo-preview">${hasPhoto?`<img class="submission-review-photo" src="/api/submission-photo/${encodeURIComponent(item.id)}?edited=1" alt="Photo being reviewed">`:'<p>No photo submitted.</p>'}</div>${item.photo_key?`${reviewSaveControl(item.id,false)}`:''}${item.edited_photo_key?`${reviewSaveControl(item.id,true)}`:''}<label>Add / replace review photo<input type="file" name="review_photo" accept="image/jpeg,image/png,image/webp" data-review-photo></label><p class="form-note">Upload an edit of the submitted photo, or your own approved photo. The original and its permission record are kept.</p>${item.photo_key?`<details><summary>Original photo permission</summary><p>${esc(item.consent_text)}</p><p>${esc(item.original_filename)} · ${esc(item.consent_version)}</p></details>`:''}<p class="form-error" role="alert"></p><div class="actions"><button type="submit" name="decision" value="save">Save edits</button><button type="submit" name="decision" value="approve" class="pink">Approve & publish</button><button type="button" data-review-deny class="admin-destructive">Decline submission</button></div></form>`);
+ prepareReviewImages();
  if(isPhoto)for(const name of ['name','brand','category','url'])$('#review-form').elements[name].readOnly=true;
  categoryOptions();
 }
@@ -505,3 +506,24 @@ document.addEventListener('change',async e=>{if(!e.target.matches('[data-review-
 
 // Recheck visibility before showing a restored voting page.
 document.addEventListener('visibilitychange',async()=>{if(document.hidden||state.busy||route()!=='vote'||$('#modal').open)return;const surface=$('#voting-surface');if(!surface)return;surface.innerHTML='<div class="loading">Getting the products ready…</div>';try{if(await refresh()&&surface.isConnected)surface.innerHTML=voteCard();}catch(e){if(surface.isConnected)surface.innerHTML='<div class="empty"><p>We couldn’t refresh the products.</p><button data-action="retry">Try again</button></div>';}});
+
+const reviewImageFiles=new WeakMap();
+function reviewSaveControl(id,edited){const url='/api/submission-photo/'+encodeURIComponent(id)+(edited?'?edited=1':'');return `<div class="review-save-image"><button type="button" data-save-review-image="${url}" disabled>Preparing ${edited?'edited ':''}image…</button><p class="form-note" role="status">Choose Save Image in your phone’s share menu. Or <a href="${url}" target="_blank" rel="noopener">open the photo</a> and press and hold to save it.</p></div>`;}
+async function prepareReviewImages(){
+ for(const button of document.querySelectorAll('[data-save-review-image]')){
+  const url=button.dataset.saveReviewImage;
+  try{
+   const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});if(!response.ok)throw Error();
+   const source=await response.blob(),bitmap=await createImageBitmap(source),canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;canvas.getContext('2d').drawImage(bitmap,0,0);bitmap.close();
+   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error();
+   const file=new File([blob],url.includes('edited')?'edited-product-photo.png':'product-photo.png',{type:'image/png'});
+   if(!button.isConnected)continue;reviewImageFiles.set(button,file);button.disabled=false;button.textContent=url.includes('edited')?'Save edited image':'Save image';
+  }catch{if(button.isConnected){button.textContent='Use “open the photo” to save';}}
+ }
+}
+document.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-save-review-image]');if(!button)return;const file=reviewImageFiles.get(button);if(!file)return;
+ const status=button.parentElement.querySelector('[role=status]');
+ if(!navigator.canShare?.({files:[file]})){window.open(button.dataset.saveReviewImage,'_blank','noopener');return;}
+ try{await navigator.share({files:[file],title:'Product photo'});}catch(err){if(err.name!=='AbortError')status.firstChild.textContent='Sharing is unavailable here. Use the link below to open and save the photo. ';}
+});
