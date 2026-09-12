@@ -47,7 +47,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    if(request.method==='GET'&&/^\/images\/[a-f0-9-]{36}\.webp$/.test(path)){
     const image=await media?.get(path.slice('/images/'.length));if(!image)fail(404,'Photo not found.');
-    return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'public, max-age=31536000, immutable','X-Content-Type-Options':'nosniff'}});
+    return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
    }
    let body={};
    if(request.method==='POST'){
@@ -68,7 +68,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    const requireUser=()=>{accessCheck();if(!user)fail(401,'Sign in with a verified email to continue.');};
    const requireVoter=requireUser;
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
-   if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:true});
+   if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),deletionPending:deleted&&linked?{email:verifiedIdentity.email}:null,preview,emailIdentityEnabled:true});
    if(request.method==='GET'&&path==='/profile/stats'){
     requireUser();
     const stats=(await rows(`SELECT count(*)::int AS rated,
@@ -139,6 +139,20 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }else await rows('DELETE FROM watchlist WHERE user_id=$1 AND product_id=$2',[user.id,id]);
     return json({watching:body.watching});
    }
+   if(request.method==='POST'&&path==='/account/delete'){
+    // A verified identity may retry its own partially completed deletion.
+    if(!linked||!verifiedIdentity)fail(401,'Sign in to delete your account.');
+    await rate('self-delete:'+linked.id,10,3600);
+    return json(await manageUser({rows,provider:context.identityAdmin,actor:linked,id:linked.id,action:'delete',confirmation:body.confirmation,selfDelete:true,media}));
+   }
+   if(request.method==='POST'&&path==='/reports'){
+    requireUser();await rate('reports:'+user.id,10,86400);
+    const id=clean(body.product_id,100),reason=clean(body.reason,80),details=clean(body.details,1500);
+    if(!['Inappropriate content','Photo rights / copyright','Incorrect product information','Spam or abuse'].includes(reason))fail(400,'Choose a report reason.');
+    if(!(await rows('SELECT id FROM products WHERE id=$1 AND active=true',[id])).length)fail(404,'Product not found.');
+    await rows('INSERT INTO content_reports(id,user_id,product_id,reason,details) VALUES($1,$2,$3,$4,$5)',[randomUUID(),user.id,id,reason,details]);
+    return json({ok:true});
+   }
    if(request.method==='POST'&&path==='/signout'){
     const response=json({ok:true});
     for(const name of [cookieName,'nf_jwt','nf_refresh'])response.headers.append('Set-Cookie',`${name}=; Path=/; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`);
@@ -203,6 +217,11 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      const from=clean(body.from,40),to=clean(body.to,40);if(!from||!to||from===to)fail(400,'Choose a category and a different destination name.');
      const changed=await rows('UPDATE products SET category=$2 WHERE category=$1 RETURNING id',[from,to]);return json({updated:changed.length});
     }
+    if(request.method==='GET'&&path==='/admin/reports')return json({reports:await rows(`SELECT r.*,p.name,p.brand,i.email FROM content_reports r LEFT JOIN products p ON p.id=r.product_id LEFT JOIN identity_links i ON i.user_id=r.user_id WHERE r.status='open' ORDER BY r.created_at LIMIT 100`)});
+    if(request.method==='POST'&&path==='/admin/report-resolve'){
+     const changed=await rows("UPDATE content_reports SET status='resolved' WHERE id=$1 AND status='open' RETURNING id",[clean(body.id,100)]);
+     if(!changed.length)fail(404,'Report not found or already resolved.');return json({ok:true});
+    }
     if(request.method==='GET'&&path==='/admin/users'){
      const search=clean(url.searchParams.get('search'),254),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
      return json({users:await rows(`SELECT u.id,u.username,i.email,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u JOIN identity_links i ON i.user_id=u.id WHERE strpos(lower(u.username),$1)>0 OR strpos(lower(i.email),$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
@@ -210,7 +229,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     if(request.method==='GET'&&path==='/admin/user-access')return json(await manageUser({rows,provider:context.identityAdmin,actor:user,id:clean(url.searchParams.get('id'),100),action:'inspect'}));
     if(request.method==='POST'&&path==='/admin/user-action'){
      await rate('user-management:'+user.id,60,600);
-     return json(await manageUser({rows,provider:context.identityAdmin,actor:user,id:clean(body.id,100),action:body.action,confirmation:body.confirmation}));
+     return json(await manageUser({rows,provider:context.identityAdmin,actor:user,id:clean(body.id,100),action:body.action,confirmation:body.confirmation,media}));
     }
     if(request.method==='POST'&&path==='/admin/lookup'){await rate('lookup:'+user.id,20,300);return json(await lookup(urlInput(body.url)));}
     if(request.method==='POST'&&path==='/admin/upload'){
@@ -258,8 +277,8 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
        const key=randomUUID()+'.webp';await media.set(key,bytes);image='/api/images/'+key;
       }
       const approved=submission.submission_kind==='photo'
-       ?await rows(`WITH reviewed AS (UPDATE submissions SET status='approved',image=$2,reviewed_at=now(),reviewed_by=$3 WHERE id=$1 AND status='pending' RETURNING *) UPDATE products SET image=reviewed.image FROM reviewed WHERE products.id=reviewed.target_product_id RETURNING products.id`,[id,image,user.id])
-       :await rows(`WITH reviewed AS (UPDATE submissions SET status='approved',image=$3,reviewed_at=now(),reviewed_by=$4 WHERE id=$1 AND status='pending' RETURNING *) INSERT INTO products(id,name,brand,category,description,image,url) SELECT $2,name,brand,category,description,image,url FROM reviewed RETURNING id`,[id,randomUUID(),image,user.id]);
+       ?await rows(`WITH reviewed AS (UPDATE submissions SET status='approved',approved_product_id=target_product_id,image=$2,reviewed_at=now(),reviewed_by=$3 WHERE id=$1 AND status='pending' AND NOT EXISTS(SELECT 1 FROM identity_links i JOIN settings d ON d.key='deleted-identity:'||encode(sha256(i.identity_id::bytea),'hex') WHERE i.user_id=submissions.user_id) RETURNING *) UPDATE products SET image=reviewed.image FROM reviewed WHERE products.id=reviewed.target_product_id RETURNING products.id`,[id,image,user.id])
+       :await rows(`WITH reviewed AS (UPDATE submissions SET status='approved',approved_product_id=$2,image=$3,reviewed_at=now(),reviewed_by=$4 WHERE id=$1 AND status='pending' AND NOT EXISTS(SELECT 1 FROM identity_links i JOIN settings d ON d.key='deleted-identity:'||encode(sha256(i.identity_id::bytea),'hex') WHERE i.user_id=submissions.user_id) RETURNING *) INSERT INTO products(id,name,brand,category,description,image,url) SELECT $2,name,brand,category,description,image,url FROM reviewed RETURNING id`,[id,randomUUID(),image,user.id]);
       if(!approved.length)fail(409,'This submission has already been reviewed.');
      }
      return json({ok:true});
