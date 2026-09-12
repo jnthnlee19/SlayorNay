@@ -5,7 +5,7 @@ export function shareModel(product){
  return {id:product.id,name:product.name,brand:product.brand,image:product.image,choice,
   // Unvoted cards never contain scores, even when the catalog has them.
   total:choice?total:null,percentage:choice&&total?Math.round(slays/total*100):null,
-  headline:choice==='slay'?'I GLOSSED IT':choice==='nay'?'I TOSSED IT':'GLOSS OR TOSS?',url:productShareUrl(product.id)};
+  headline:choice==='slay'?'I GLOSSED IT ✨':choice==='nay'?'I TOSSED IT ✕':'GLOSS OR TOSS?',url:productShareUrl(product.id)};
 }
 function loadImage(src){
  return new Promise((resolve,reject)=>{
@@ -32,19 +32,26 @@ export async function generateShareImage(product,{width=1080,height=1920}={}){
  const model=shareModel(product),canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Image generation is unavailable in this browser.');
  const scale=width/1080,H=height/scale;ctx.scale(scale,scale);
- const [logo,photo]=await Promise.all([loadImage('/logo.png'),product.image?loadImage('/api/share-photo/'+encodeURIComponent(product.id)).catch(()=>null):null]);
+ // The endpoint resolves the approved catalog image; the revision avoids stale browser caches after replacement.
+ const [logo,photo]=await Promise.all([loadImage('/logo.png'),product.image?loadImage('/api/share-photo/'+encodeURIComponent(product.id)+'?image='+encodeURIComponent(product.image)).catch(()=>null):null]);
  const bg=ctx.createLinearGradient(0,0,1080,H);bg.addColorStop(0,theme["bg-main"]);bg.addColorStop(.6,theme["pink-soft"]);bg.addColorStop(1,theme["bg-main"]);ctx.fillStyle=bg;ctx.fillRect(0,0,1080,H);
- const header=Math.min(280,H*.18),footer=Math.min(model.choice?600:480,H*.37),photoY=header+28,photoH=H-footer-photoY-20;
+ const header=Math.min(220,H*.16),footer=Math.min(model.choice?560:460,H*.42),photoY=header+28,photoH=H-footer-photoY-20;
  contain(ctx,logo,48,18,header,header);
  ctx.textAlign='right';ctx.fillStyle=theme["pink-primary"];ctx.font='500 24px Arial';ctx.fillText('REAL REVIEWS.',1020,header*.43);ctx.fillText('FLAWLESS NAILS.',1020,header*.43+35);
  ctx.strokeStyle=theme["pink-muted"];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(60,header+8);ctx.lineTo(1020,header+8);ctx.stroke();
  box(ctx,48,photoY,984,photoH,32,theme["surface"]);
- if(photo){ctx.save();ctx.beginPath();ctx.roundRect(48,photoY,984,photoH,32);ctx.clip();contain(ctx,photo,60,photoY+12,960,photoH-24);ctx.restore();}
+ if(photo){ctx.save();ctx.beginPath();ctx.roundRect(48,photoY,984,photoH,32);ctx.clip();contain(ctx,photo,84,photoY+36,912,photoH-72);ctx.restore();}
  else{contain(ctx,logo,140,photoY+40,800,photoH-140);ctx.textAlign='center';ctx.fillStyle=theme["text-muted"];ctx.font='28px Arial';ctx.fillText('Real products. Your honest verdict.',540,photoY+photoH-45);}
- let y=H-footer+24;ctx.textAlign='center';ctx.fillStyle=theme["pink-primary"];ctx.font='bold 25px Arial';ctx.fillText(String(model.brand||'').toUpperCase().slice(0,55),540,y);
+ let y=H-footer+24;ctx.textAlign='center';ctx.fillStyle=theme["text-main"];ctx.font='bold 25px Arial';ctx.fillText(lines(ctx,String(model.brand||'').toUpperCase(),920,1)[0]||'',540,y);
  ctx.font='bold 46px Georgia';ctx.fillStyle=theme["text-main"];y+=54;for(const line of lines(ctx,model.name,920,2)){ctx.fillText(line,540,y);y+=53;}
  const pillY=y+8,pillH=92;const gloss=model.choice!=='nay';const gradient=ctx.createLinearGradient(140,pillY,940,pillY+pillH);gradient.addColorStop(0,gloss?theme["pink-secondary"]:theme["text-main"]);gradient.addColorStop(.55,gloss?theme["pink-primary"]:theme["text-main"]);gradient.addColorStop(1,gloss?theme["pink-primary"]:theme["text-main"]);
- box(ctx,120,pillY,840,pillH,46,gradient);ctx.strokeStyle=gloss?theme["pink-primary"]:theme["pink-muted"];ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=theme["surface"];ctx.font='bold 45px Georgia';ctx.fillText(model.headline,540,pillY+61);
+ box(ctx,120,pillY,840,pillH,46,model.choice?gradient:theme["pink-secondary"]);ctx.strokeStyle=gloss?theme["pink-primary"]:theme["pink-muted"];ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=model.choice?theme["surface"]:theme["text-main"];ctx.font='bold 45px Georgia';
+ const title=model.headline.replace(/ [✨✕]$/u,''),labelWidth=ctx.measureText(title).width,labelX=model.choice?514:540;
+ ctx.fillText(title,labelX,pillY+61);
+ // Draw the marks ourselves so phone emoji fonts cannot change their appearance.
+ if(model.choice){const x=labelX+labelWidth/2+30,cy=pillY+46;ctx.save();ctx.translate(x,cy);ctx.beginPath();
+  if(model.choice==='slay'){ctx.moveTo(0,-22);ctx.quadraticCurveTo(3,-3,19,0);ctx.quadraticCurveTo(3,3,0,22);ctx.quadraticCurveTo(-3,3,-19,0);ctx.quadraticCurveTo(-3,-3,0,-22);ctx.fill();}
+  else{ctx.strokeStyle=theme["surface"];ctx.lineWidth=5;ctx.lineCap='round';ctx.moveTo(-12,-12);ctx.lineTo(12,12);ctx.moveTo(12,-12);ctx.lineTo(-12,12);ctx.stroke();}ctx.restore();}
  y=pillY+pillH+54;
  if(model.choice){ctx.font='bold 36px Arial';ctx.fillStyle=theme["pink-primary"];ctx.fillText(model.percentage===null?'Awaiting community votes':model.percentage+'% GLOSS',540,y);ctx.font='24px Arial';ctx.fillStyle=theme["text-muted"];ctx.fillText(model.total.toLocaleString()+' community '+(model.total===1?'vote':'votes')+' · at time of sharing',540,y+37);y+=90;}
  else y+=32;
