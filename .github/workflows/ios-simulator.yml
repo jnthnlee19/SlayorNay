@@ -9,10 +9,14 @@ permissions:
   contents: read
 jobs:
   simulator:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Verify current Apple SDK
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
       - name: Install project generator
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -26,4 +30,23 @@ jobs:
         with:
           name: GlossOrToss-simulator
           path: GlossOrToss-simulator.zip
+          retention-days: 14
+
+      - name: Capture iPhone preview screens
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next(x["udid"] for group in d["devices"].values() for x in group if "iPhone" in x["name"] and "Pro Max" in x["name"]))')
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl status_bar "$DEVICE" override --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
+          xcrun simctl install "$DEVICE" build/Build/Products/Debug-iphonesimulator/GlossOrToss.app
+          mkdir -p screenshots
+          for SECTION in vote discover submit profile; do
+            xcrun simctl launch --terminate-running-process "$DEVICE" com.jnthnlee19.glossortoss --preview-section "$SECTION"
+            sleep 15
+            xcrun simctl io "$DEVICE" screenshot "screenshots/$SECTION.png"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GlossOrToss-preview-screens
+          path: screenshots/*.png
           retention-days: 14
