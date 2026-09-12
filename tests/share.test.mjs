@@ -9,8 +9,8 @@ import {shareModel,productShareUrl} from '../public/share-card.mjs';
 test('share model hides unvoted scores and uses the current saved choice',()=>{
  const p={id:'abc',name:'Top Coat',brand:'Test',total:100,slays:84,my_vote:null};
  assert.deepEqual([shareModel(p).percentage,shareModel(p).total],[null,null]);
- assert.equal(shareModel({...p,my_vote:'slay'}).headline,'I GLOSSED IT');
- assert.equal(shareModel({...p,my_vote:'nay'}).headline,'I TOSSED IT');
+ assert.equal(shareModel({...p,my_vote:'slay'}).headline,'I GLOSSED IT ✨');
+ assert.equal(shareModel({...p,my_vote:'nay'}).headline,'I TOSSED IT ✕');
  assert.equal(shareModel({...p,my_vote:'nay'}).percentage,84);
  assert.equal(shareModel({...p,my_vote:'slay',total:0}).percentage,null);
  assert.equal(productShareUrl('a/b'),'https://glossortoss.com/#product/a%2Fb');
@@ -32,6 +32,14 @@ test('public share photos only use active catalog URLs and never alter votes',as
  let res=await get('/share-photo/'+id);assert.equal(res.status,200);assert.equal(res.headers.get('content-type'),'image/png');
  assert.equal((await res.arrayBuffer()).byteLength,png.length);
  await get('/share-photo/'+id);assert.equal(calls,1);
+ const storedKey='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.webp';
+ const uploaded=await sharp({create:{width:30,height:70,channels:3,background:'white'}}).webp().toBuffer();
+ await db.query('UPDATE products SET image=$2 WHERE id=$1',[id,'/api/images/'+storedKey]);
+ const storedApi=createApi({query:async(s,p)=>(await db.query(s,p)).rows,media:{get:async key=>{assert.equal(key,storedKey);return uploaded;}},sharePhoto:async()=>{throw new Error('Uploaded photos must not use an external fetch');}});
+ const storedRes=await storedApi(new Request('https://example.test/api/share-photo/'+id+'?image=revision'),{ip:'stored-test'});
+ assert.equal(storedRes.status,200);
+ const metadata=await sharp(Buffer.from(await storedRes.arrayBuffer())).metadata();
+ assert.equal(metadata.format,'png');assert.equal(metadata.width/metadata.height,30/70);
  assert.equal((await get('/share-photo/https://private.test')).status,404);
  await db.query('UPDATE products SET active=false WHERE id=$1',[id]);assert.equal((await get('/share-photo/'+id)).status,404);
  assert.equal((await db.query('SELECT count(*)::int AS n FROM votes')).rows[0].n,0);
