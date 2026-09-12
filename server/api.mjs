@@ -1,3 +1,4 @@
+import {manageUser,deletedKey} from './user-management.mjs';
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { lookupProduct, sanitizeImage, fetchSharePhoto, normalizeSharePhoto } from './product-media.mjs';
 import {PHOTO_CONSENT, PHOTO_CONSENT_VERSION} from '../public/photo-tools.mjs';
@@ -60,8 +61,11 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    const identity=context.identityUser;
    const verifiedIdentity=identity?.id&&identity?.email&&identity?.confirmedAt?identity:null;
    const linked=verifiedIdentity?(await rows('SELECT u.* FROM users u JOIN identity_links i ON i.user_id=u.id WHERE i.identity_id=$1',[verifiedIdentity.id]))[0]:null;
-   const user=linked?{...linked,email:verifiedIdentity.email,email_verified:true}:null;
-   const requireUser=()=>{if(!user)fail(401,'Sign in with a verified email to continue.');};
+   const deleted=verifiedIdentity?!!(await rows('SELECT key FROM settings WHERE key=$1',[deletedKey(verifiedIdentity.id)])).length:false;
+   const restricted=verifiedIdentity?.suspended||deleted;
+   const accessCheck=()=>{if(restricted){const e=new HttpError(403,deleted?'This account has been deleted or is being deleted.':'Your account is suspended. Contact glossortossapp@gmail.com for help.');e.code='ACCOUNT_DISABLED';throw e;}};
+   const user=linked&&!restricted?{...linked,email:verifiedIdentity.email,email_verified:true}:null;
+   const requireUser=()=>{accessCheck();if(!user)fail(401,'Sign in with a verified email to continue.');};
    const requireVoter=requireUser;
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
    if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),preview,emailIdentityEnabled:true});
@@ -89,6 +93,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    if(request.method==='POST'&&path==='/identity/session'){
     if(!verifiedIdentity)fail(401,'Verify your email and sign in first.');
+    accessCheck();
     await rate('identity-profile:'+verifiedIdentity.id,30,900);
     if(linked){
      await rows('UPDATE identity_links SET email=$2 WHERE identity_id=$1',[verifiedIdentity.id,verifiedIdentity.email]);
@@ -98,12 +103,12 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     // by an email or a user-supplied username: existing links retain their owner.
     const id='identity:'+verifiedIdentity.id,username='member_'+digest(verifiedIdentity.id).slice(0,23);
     const created=await rows(`WITH created AS (
-     INSERT INTO users(id,username,password_hash,recovery_hash) VALUES($1,$2,'identity-only','identity-only')
+     INSERT INTO users(id,username,password_hash,recovery_hash) SELECT $1,$2,'identity-only','identity-only' WHERE NOT EXISTS(SELECT 1 FROM settings WHERE key=$5)
      ON CONFLICT(id) DO UPDATE SET id=users.id RETURNING *
     ), connected AS (
      INSERT INTO identity_links(identity_id,user_id,email) SELECT $3,id,$4 FROM created
      ON CONFLICT(identity_id) DO UPDATE SET email=EXCLUDED.email RETURNING user_id
-    ) SELECT created.* FROM created JOIN connected ON connected.user_id=created.id`,[id,username,verifiedIdentity.id,verifiedIdentity.email]);
+    ) SELECT created.* FROM created JOIN connected ON connected.user_id=created.id`,[id,username,verifiedIdentity.id,verifiedIdentity.email,deletedKey(verifiedIdentity.id)]);
     if(!created[0])fail(409,'Please sign in again to finish loading your account.');
     return json({user:publicUser({...created[0],email:verifiedIdentity.email,email_verified:true})},201);
    }
@@ -200,6 +205,11 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     if(request.method==='GET'&&path==='/admin/users'){
      const search=clean(url.searchParams.get('search'),254),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
      return json({users:await rows(`SELECT u.id,u.username,i.email,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u JOIN identity_links i ON i.user_id=u.id WHERE strpos(lower(u.username),$1)>0 OR strpos(lower(i.email),$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
+    }
+    if(request.method==='GET'&&path==='/admin/user-access')return json(await manageUser({rows,provider:context.identityAdmin,actor:user,id:clean(url.searchParams.get('id'),100),action:'inspect'}));
+    if(request.method==='POST'&&path==='/admin/user-action'){
+     await rate('user-management:'+user.id,60,600);
+     return json(await manageUser({rows,provider:context.identityAdmin,actor:user,id:clean(body.id,100),action:body.action,confirmation:body.confirmation}));
     }
     if(request.method==='POST'&&path==='/admin/lookup'){await rate('lookup:'+user.id,20,300);return json(await lookup(urlInput(body.url)));}
     if(request.method==='POST'&&path==='/admin/upload'){

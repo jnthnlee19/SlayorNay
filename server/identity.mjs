@@ -7,7 +7,7 @@ export async function verifiedIdentityFromRequest(request,fetcher=fetch){
  const r=await fetcher(endpoint+'/user',{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(10000)});
  if(!r.ok)return null;
  const u=await r.json();
- return u.id&&u.email&&u.confirmed_at?{id:u.id,email:u.email,confirmedAt:u.confirmed_at}:null;
+ return u.id&&u.email&&u.confirmed_at?{id:u.id,email:u.email,confirmedAt:u.confirmed_at,suspended:u.app_metadata?.gloss_or_toss_suspended===true}:null;
 }
 export async function identityPasswordLogin(email,password,fetcher=fetch){
  let r;
