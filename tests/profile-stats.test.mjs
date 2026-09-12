@@ -25,6 +25,10 @@ test('profile stats use only the signed-in member’s saved rows and track edits
   assert.deepEqual(await stats(bob),{rated:1,gloss:0,toss:1,watchlist:0});
   await call(alice,'/vote/change',{product_id:'cnd-solaroil',choice:'slay'});
   assert.deepEqual(await stats(alice),{rated:2,gloss:2,toss:0,watchlist:1});
+  await call(bob,'/watchlist',{product_id:'cnd-solaroil',watching:true});
+  const catalog=(await call(alice,'/products')).data.products.find(p=>p.id==='cnd-solaroil');
+  assert.equal(catalog.watchlist_count,2);
+  assert.equal(catalog.total,1); // Watchlist aggregation must not multiply votes.
   await call(alice,'/watchlist',{product_id:'cnd-solaroil',watching:false});
   assert.equal((await stats(alice)).watchlist,0);
   await db.query("UPDATE products SET active=false WHERE id='cnd-solaroil'");
