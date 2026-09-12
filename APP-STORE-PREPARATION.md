@@ -59,7 +59,9 @@ Hosting/authentication also processes operational logs and network identifiers f
 
 ## Build assets and validation
 
-The GitHub iPhone simulator workflow uses macOS 26/Xcode and produces an unsigned simulator app plus actual preview screenshots. The app icon uses the existing Gloss or Toss logo on the Bubblegum background. Native image sharing is restricted to the app's HTTPS host and bounded PNG content. Native photo saving still requires real-device validation.
+The GitHub iPhone simulator workflow uses macOS 26/Xcode and produces an unsigned simulator app. Screenshot capture is an optional manual-workflow checkbox, with a twelve-minute limit. The first run completed successfully after a slow Apple simulator startup migration. Inspect the generated screenshots before using them in a listing; signed-in Profile and Submit screenshots should come from the final TestFlight build.
+
+The app icon uses the existing Gloss or Toss logo on the Bubblegum background. Native image sharing is restricted to the app's HTTPS host and bounded PNG content. Native photo saving still requires real-device validation. Website regression tests passed (39 tests), plus one focused native-share bridge test. Live privacy/support pages and public voting were checked; reporting was exercised against an isolated database. No real accounts were deleted during testing.
 
 Apple may request changes under minimum-functionality guideline 4.2 for a website-based app; native sharing and navigation do not guarantee approval.
 
