@@ -53,7 +53,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    if(request.method==='POST'){
     if(request.headers.get('origin')!==url.origin)fail(403,'Please submit this from the website.');
     if(!request.headers.get('content-type')?.startsWith('application/json'))fail(415,'Expected a JSON request.');
-    const maxBody=['/admin/upload','/submissions'].includes(path)?2900000:20000;
+    const maxBody=['/admin/upload','/submissions','/admin/submission-edit'].includes(path)?2900000:20000;
     if(Number(request.headers.get('content-length')||0)>maxBody)fail(413,'That submission is too large.');
     const reader=request.body?.getReader();let raw='',size=0;const decoder=new TextDecoder();if(reader){while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>maxBody){await reader.cancel();fail(413,'That submission is too large.');}raw+=decoder.decode(chunk.value,{stream:true});}raw+=decoder.decode();}
     try{body=JSON.parse(raw);}catch{fail(400,'Invalid request.');}if(!body||typeof body!=='object'||Array.isArray(body))fail(400,'Invalid request.');
@@ -161,10 +161,11 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    }
    if(request.method==='GET'&&path.startsWith('/submission-photo/')){
     requireUser();const id=path.slice('/submission-photo/'.length);
-    const submission=(await rows('SELECT user_id,photo_key FROM submissions WHERE id=$1',[id]))[0];
+    const submission=(await rows('SELECT * FROM submissions WHERE id=$1',[id]))[0];
     if(!submission||(!user.is_admin&&submission.user_id!==user.id))fail(404,'Photo not found.');
-    const bytes=submission.photo_key?await media?.get(submission.photo_key):null;if(!bytes)fail(404,'Photo not found.');
-    return new Response(bytes,{headers:{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+    const key=url.searchParams.has('edited')&&user.is_admin?(submission.edited_photo_key||submission.photo_key):submission.photo_key;
+    const bytes=key?await media?.get(key):null;if(!bytes)fail(404,'Photo not found.');
+    return new Response(bytes,{headers:{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff',...(url.searchParams.has('download')?{'Content-Disposition':'attachment; filename=product-photo.webp'}:{})}});
    }
    if(request.method==='POST'&&path==='/submissions'){
     requireUser();await rate('submit:'+user.id,20,86400);
@@ -231,6 +232,16 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      else await rows('INSERT INTO products(id,name,brand,category,description,image,url,affiliate,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[id,p.name,p.brand,p.category,p.description,p.image,p.url,p.affiliate,p.active]);
      return json({ok:true,id});
     }
+    if(request.method==='POST'&&path==='/admin/submission-edit'){
+     const id=clean(body.id,100),submission=(await rows("SELECT * FROM submissions WHERE id=$1 AND status='pending'",[id]))[0];
+     if(!submission)fail(409,'This submission has already been reviewed.');
+     const p=productInput({...submission,...body,image:''});
+     let key=submission.edited_photo_key||'';
+     if(body.base64){const bytes=await sanitizeImage(body.base64);key='pending/'+randomUUID()+'.webp';await media.set(key,bytes);}
+     const changed=await rows("UPDATE submissions SET name=$2,brand=$3,category=$4,url=$5,description=$6,edited_photo_key=$7 WHERE id=$1 AND status='pending' RETURNING id",[id,p.name,p.brand,p.category,p.url,p.description,key]);
+     if(!changed.length)fail(409,'This submission has already been reviewed.');
+     return json({ok:true});
+    }
     if(request.method==='POST'&&path==='/admin/review'){
      const id=clean(body.id,100);if(!['approve','reject'].includes(body.action))fail(400,'Choose approve or reject.');
      const submission=(await rows("SELECT * FROM submissions WHERE id=$1 AND status='pending'",[id]))[0];
@@ -241,9 +252,9 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      }else{
       if(submission.submission_kind==='photo'&&(!submission.target_product_id||!(await rows('SELECT id FROM products WHERE id=$1',[submission.target_product_id])).length))fail(409,'The original product was deleted. Decline this submission.');
       let image='';
-      if(submission.photo_key){
-       if(!submission.consent_text||!submission.consent_at)fail(400,'Photo permission is missing.');
-       const bytes=await media?.get(submission.photo_key);if(!bytes)fail(404,'Submitted photo is unavailable.');
+      if(submission.edited_photo_key||submission.photo_key){
+       if(submission.photo_key&&(!submission.consent_text||!submission.consent_at))fail(400,'Photo permission is missing.');
+       const bytes=await media?.get(submission.edited_photo_key||submission.photo_key);if(!bytes)fail(404,'Submitted photo is unavailable.');
        const key=randomUUID()+'.webp';await media.set(key,bytes);image='/api/images/'+key;
       }
       const approved=submission.submission_kind==='photo'
