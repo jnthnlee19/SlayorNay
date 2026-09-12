@@ -25,7 +25,11 @@ test('blocked stores and missing photos have useful fallback messages',async()=>
  await assert.rejects(lookupProduct('https://example.com',{fetchHtml:async()=>{throw new Error('blocked');}}),/upload/);
 });
 test('uploads decode and re-encode real photos, reject disguised files',async()=>{
- const input=await sharp({create:{width:20,height:10,channels:3,background:'#f33490'}}).png().toBuffer();const output=await sanitizeImage(input.toString('base64'));const meta=await sharp(output).metadata();assert.equal(meta.format,'webp');assert.equal(meta.width,20);
+ for(const format of ['jpeg','png','webp']) {
+ const input=await sharp({create:{width:20,height:10,channels:3,background:'#f33490'}}).toFormat(format).toBuffer();
+ const output=await sanitizeImage(input.toString('base64'));const meta=await sharp(output).metadata();
+ assert.equal(meta.format,'webp');assert.equal(meta.width,20);assert.equal(meta.height,10);
+ }
  await assert.rejects(sanitizeImage(Buffer.from('<svg onload="alert(1)"></svg>').toString('base64')));
  await assert.rejects(sanitizeImage('A'.repeat(2800001)));
 });
