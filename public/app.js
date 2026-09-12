@@ -183,7 +183,7 @@ async function changeVote(id,choice){if(state.busy)return;state.busy=true;docume
 
 function previousProduct(){if(state.busy||!$('#voting-surface')||$('#modal').open)return;if(state.index<=0){toast('You’re at the first product.');return;}state.index--;$('#voting-surface').innerHTML=voteCard();toast('Previous product — no vote cast.');}
 
-function profilePage(){if(!state.user)return '<div class="empty"><h1>Your profile</h1><p>Sign in to manage your account and see your votes.</p><button class="pink" data-action="signin">Sign in or sign up</button></div>';return '<div class="eyebrow">Your nail community account</div><h1>Your <em>Profile.</em></h1><section class="panel"><h2>'+esc(accountLabel())+'</h2><p class="muted">Your opinions. Your saved votes.</p>'+emailProfile()+'<section id="profile-stats" aria-label="Your voting stats" aria-live="polite"><p class="muted">Loading your stats…</p></section><p><a class="pink profile-link" href="#watchlist">My Watchlist →</a></p><p><a class="pink profile-link" href="#my-votes">My Votes →</a></p>'+(state.user.is_admin?'<p><a href="#admin">Open product admin →</a></p>':'')+'<button data-action="signout">Sign out</button></section><p><a href="https://www.tiktok.com/@gloss.or.toss" target="_blank" rel="noopener noreferrer">TikTok · @gloss.or.toss</a></p>';}
+function profilePage(){if(!state.user)return '<div class="empty"><h1>Your profile</h1><p>Sign in to manage your account and see your votes.</p><button class="pink" data-action="signin">Sign in or sign up</button></div>';return '<h1>Your <em>Profile.</em></h1><section class="panel personal-profile"><section id="profile-stats" aria-label="Your voting stats" aria-live="polite"><p class="muted">Loading your stats…</p></section><div class="profile-activity"><a class="pink profile-link" href="#watchlist">My Watchlist →</a><a class="pink profile-link" href="#my-votes">My Votes →</a></div><section class="profile-settings" aria-labelledby="profile-settings-title"><h2 id="profile-settings-title">Account settings</h2>'+emailProfile()+'<button class="text-button" data-action="signout">Sign out</button>'+(state.user.is_admin?'<p><a href="#admin">Open product admin →</a></p>':'')+'</section></section><p><a href="https://www.tiktok.com/@gloss.or.toss" target="_blank" rel="noopener noreferrer">TikTok · @gloss.or.toss</a></p>';}
 
 
 async function identityClient(){return import('./identity-client.js');}
@@ -402,7 +402,7 @@ await startAuthentication();
 function profileStats(stats){
  const gloss=stats.rated?Math.round(stats.gloss/stats.rated*100):null;
  const cells=[['Products Rated',stats.rated],['% Gloss',gloss===null?'—':gloss+'%'],['% Toss',gloss===null?'—':(100-gloss)+'%'],['Watchlist Count',stats.watchlist]];
- return '<dl class="profile-stats-grid">'+cells.map(([label,value])=>'<div><dt>'+label+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl>'+(stats.rated?'<p class="form-note">Your saved activity, including temporarily hidden products.</p>':'<p class="muted">Your first verdict starts your story. <a href="#vote">Rate a product you’ve tried →</a></p>');
+ return '<dl class="profile-stats-grid">'+cells.map(([label,value])=>'<div><dt>'+label+'</dt><dd>'+esc(value)+'</dd></div>').join('')+'</dl>'+(stats.rated?'':'<p class="muted">Your first verdict starts your story. <a href="#vote">Rate a product you’ve tried →</a></p>');
 }
 document.addEventListener('click',e=>{if(e.target.closest('[data-action="profile-stats-retry"]'))render();});
 

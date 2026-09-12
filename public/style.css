@@ -424,3 +424,17 @@ body.vote-page{height:100dvh;overflow:hidden;padding:0;--vote-nav-height:74px}
  .product-tile .photo-invite a{font-size:11px;padding:8px}
  .product-tile .tile-copy{padding:12px}
 }
+
+/* Profile activity leads; existing account actions remain below it. */
+.personal-profile{padding:22px}
+.personal-profile .profile-stats-grid{margin:0 0 18px;gap:10px}
+.personal-profile .profile-stats-grid>div{padding:16px 14px;background:#c66a8a0c}
+.personal-profile .profile-stats-grid dd{margin-top:6px;font-size:34px}
+.profile-activity{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.profile-activity .profile-link{display:block;text-align:center;font-weight:700;padding:13px 16px}
+.profile-settings{margin-top:22px;padding-top:16px;border-top:1px solid #49333f;font-size:13px;color:#baaab4}
+.profile-settings h2{font-size:17px;letter-spacing:0;color:#ead6e0;margin:0 0 10px}
+.profile-settings p{margin:8px 0;overflow-wrap:anywhere}
+.profile-settings [data-email-mode]{display:block;padding:0;border:0;border-radius:0;background:transparent;color:#d7a8bb;font-size:13px;font-weight:400;text-decoration:underline;text-underline-offset:4px;margin:12px 0}
+.profile-settings [data-action=signout]{font-size:13px;color:#baaab4;font-weight:400}
+@media(max-width:680px){.personal-profile{padding:16px}.personal-profile .profile-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:14px}.profile-activity{grid-template-columns:1fr}.profile-settings{margin-top:18px;padding-top:14px}}
