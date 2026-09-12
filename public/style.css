@@ -503,3 +503,6 @@ button.admin-destructive{background:var(--danger-soft);color:var(--danger-text);
 #review-form .review-photo-preview{margin:12px 0}
 #admin-product-sort{max-width:340px}
 @media(max-height:620px){.vote-finish{gap:7px;padding:12px}.vote-finish .finish-icon{font-size:30px}.vote-finish p{font-size:13px}.vote-finish button,.vote-finish .profile-link{padding:8px 12px}}
+
+/* Fit inside WKWebView; the native shell supplies the surrounding chrome. */
+.native-shell .vote-page #vote-card{height:100%!important;min-height:0!important}

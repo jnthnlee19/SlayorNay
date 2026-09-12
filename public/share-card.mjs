@@ -61,4 +61,13 @@ export async function generateShareImage(product,{width=1080,height=1920}={}){
  return {model,blob,photoAvailable:!!photo,file:new File([blob],'gloss-or-toss-'+String(model.name).replace(/[^a-z0-9]+/gi,'-').slice(0,60)+'.png',{type:'image/png'})};
 }
 export function nativeShareData(art){return {files:[art.file],title:art.model.name+' · Gloss or Toss',text:art.model.headline+' — '+art.model.brand+' '+art.model.name+'. What do you think?',url:art.model.url};}
-export function canShareImage(art){try{return !!navigator.share&&!!navigator.canShare?.({files:[art.file]});}catch{return false;}}
+export function canShareImage(art){if(window.webkit?.messageHandlers?.shareImage)return true;try{return !!navigator.share&&!!navigator.canShare?.({files:[art.file]});}catch{return false;}}
+
+export async function shareImage(data){
+ const bridge=window.webkit?.messageHandlers?.shareImage;
+ if(!bridge)return navigator.share(data);
+ const file=data.files?.[0];if(!file||file.type!=='image/png'||file.size>12*1024*1024)throw new Error('Choose a PNG image under 12 MB.');
+ const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Could not read image.'));reader.readAsDataURL(file);});
+ const result=await bridge.postMessage({image,url:data.url||'',text:data.text||data.title||''});
+ if(result?.cancelled){const e=new Error('Sharing cancelled');e.name='AbortError';throw e;}
+}
