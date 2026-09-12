@@ -10,6 +10,11 @@ private enum Bubblegum {
 }
 
 private let site = URL(string: "https://glossortoss.com/")!
+private let initialSection: String = {
+    let args = ProcessInfo.processInfo.arguments
+    let requested = args.firstIndex(of: "--preview-section").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? "vote"
+    return ["vote", "discover", "submit", "profile"].contains(requested) ? requested : "vote"
+}()
 
 @main
 struct GlossOrTossApp: App {
@@ -38,7 +43,7 @@ final class BrowserModel: ObservableObject {
 
 struct MainView: View {
     @StateObject private var browser = BrowserModel()
-    @State private var section = "vote"
+    @State private var section = initialSection
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -86,9 +91,7 @@ struct SiteView: UIViewRepresentable {
         let script = "const style=document.createElement('style');style.textContent=" + String(data: try! JSONEncoder().encode(css), encoding: .utf8)! + ";document.head.appendChild(style);"
         model.webView.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         model.webView.configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "shareImage")
-        let args = ProcessInfo.processInfo.arguments
-        let start = args.firstIndex(of: "--preview-section").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? "vote"
-        model.open(["vote", "discover", "submit", "profile"].contains(start) ? start : "vote")
+        model.open(initialSection)
         return model.webView
     }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
