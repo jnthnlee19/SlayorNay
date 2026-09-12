@@ -438,3 +438,19 @@ body.vote-page{height:100dvh;overflow:hidden;padding:0;--vote-nav-height:74px}
 .profile-settings [data-email-mode]{display:block;padding:0;border:0;border-radius:0;background:transparent;color:#d7a8bb;font-size:13px;font-weight:400;text-decoration:underline;text-underline-offset:4px;margin:12px 0}
 .profile-settings [data-action=signout]{font-size:13px;color:#baaab4;font-weight:400}
 @media(max-width:680px){.personal-profile{padding:16px}.personal-profile .profile-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:14px}.profile-activity{grid-template-columns:1fr}.profile-settings{margin-top:18px;padding-top:14px}}
+
+/* A short community contribution form with full terms available inline. */
+.community-submit{max-width:720px;margin:0 auto}
+.community-submit .submit-photo-link{font-size:14px;margin:10px 0}
+.community-submit .submit-intro{font-size:14px;line-height:1.5;margin:12px 0 18px}
+.community-submit .panel{padding:22px}
+.community-submit input,.community-submit select,.community-submit textarea{margin:6px 0 14px}
+.community-submit textarea{min-height:76px}
+.community-photo-block{margin:16px 0}
+.community-photo-block .form-note{margin:5px 0;font-size:12px;line-height:1.4}
+.community-photo-block .photo-consent{border:0;background:none;padding:0;margin:12px 0 6px;gap:10px;font-size:13px;font-weight:400}
+.community-photo-block .photo-consent input{margin:1px 0 0;flex:none}
+.photo-terms,.submission-guidelines{font-size:12px;color:#baaab4;margin:8px 0 14px}
+.photo-terms summary,.submission-guidelines summary{cursor:pointer;color:#d7a8bb;text-decoration:underline;text-underline-offset:3px}
+.photo-terms p,.submission-guidelines p{line-height:1.5;margin:8px 0}
+@media(max-width:680px){.community-submit h1{font-size:32px;margin:0 0 10px}.community-submit .panel{padding:16px}.community-submit .submit-intro{font-size:13px;margin-bottom:14px}}
