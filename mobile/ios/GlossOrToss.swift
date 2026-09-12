@@ -2,11 +2,17 @@ import SwiftUI
 import WebKit
 import SafariServices
 
+private enum Bubblegum {
+    static let canvas = UIColor(red: 1, green: 238/255, blue: 242/255, alpha: 1)
+    static let ink = Color(red: 26/255, green: 26/255, blue: 26/255)
+    static let pink = Color(red: 1, green: 45/255, blue: 141/255)
+}
+
 private let site = URL(string: "https://slayornay-nails.netlify.app/")!
 
 @main
 struct GlossOrTossApp: App {
-    var body: some Scene { WindowGroup { MainView().preferredColorScheme(.dark) } }
+    var body: some Scene { WindowGroup { MainView().preferredColorScheme(.light) } }
 }
 
 final class BrowserModel: ObservableObject {
@@ -17,8 +23,8 @@ final class BrowserModel: ObservableObject {
         configuration.websiteDataStore = .default()
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false
-        view.backgroundColor = UIColor.black
-        view.scrollView.backgroundColor = UIColor.black
+        view.backgroundColor = Bubblegum.canvas
+        view.scrollView.backgroundColor = Bubblegum.canvas
         view.allowsBackForwardNavigationGestures = false
         return view
     }()
@@ -49,7 +55,7 @@ struct MainView: View {
                         Text("Let’s reconnect").font(.title2)
                         Text("Check your connection and try again. Your saved votes are safe.").multilineTextAlignment(.center)
                         Button("Try again") { browser.retry() }.buttonStyle(.borderedProminent)
-                    }.padding(30).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
+                    }.padding(30).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(Bubblegum.canvas))
                 }
             }
             HStack {
@@ -57,13 +63,13 @@ struct MainView: View {
                 tab("Explore", "magnifyingglass", "discover")
                 tab("Submit", "plus.circle", "submit")
                 tab("Profile", "person.crop.circle", "profile")
-            }.padding(.top, 10).padding(.bottom, 6).background(Color(white: 0.08))
-        }.tint(Color(red: 0.95, green: 0.79, blue: 0.84))
+            }.padding(.top, 10).padding(.bottom, 6).background(Color.white)
+        }.background(Color(Bubblegum.canvas)).foregroundStyle(Bubblegum.ink).tint(Bubblegum.pink)
     }
     private func tab(_ title: String, _ icon: String, _ target: String) -> some View {
         Button { section = target; browser.open(target) } label: {
             VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption) }
-                .frame(maxWidth: .infinity).opacity(section == target ? 1 : 0.55)
+                .frame(maxWidth: .infinity).foregroundStyle(section == target ? Bubblegum.pink : Bubblegum.ink).opacity(section == target ? 1 : 0.55)
         }.accessibilityAddTraits(section == target ? .isSelected : [])
     }
 }
