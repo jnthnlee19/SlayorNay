@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import SafariServices
+import ImageIO
 
 private enum Bubblegum {
     static let canvas = UIColor(red: 1, green: 238/255, blue: 242/255, alpha: 1)
@@ -8,7 +9,7 @@ private enum Bubblegum {
     static let pink = Color(red: 1, green: 45/255, blue: 141/255)
 }
 
-private let site = URL(string: "https://slayornay-nails.netlify.app/")!
+private let site = URL(string: "https://glossortoss.com/")!
 
 @main
 struct GlossOrTossApp: App {
@@ -41,7 +42,7 @@ struct MainView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                AsyncImage(url: URL(string: "https://slayornay-nails.netlify.app/logo.png")) { image in image.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(width: 64, height: 64).accessibilityLabel("Gloss or Toss")
+                AsyncImage(url: URL(string: "https://glossortoss.com/logo.png")) { image in image.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(width: 64, height: 64).accessibilityLabel("Gloss or Toss")
                 Spacer()
 
                 ShareLink(item: site) { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share Gloss or Toss")
@@ -81,16 +82,43 @@ struct SiteView: UIViewRepresentable {
         model.webView.navigationDelegate = context.coordinator
         model.webView.uiDelegate = context.coordinator
         // Keep native navigation visible while hiding duplicate website chrome.
-        let css = "header,footer{display:none!important}.vote-page .intro,.focus-controls{display:none!important}.vote-page main{padding-top:12px!important}.vote-page #vote-card{height:calc(100dvh - 110px)!important;min-height:360px!important}"
+        let css = "header,footer,.bottom-nav{display:none!important}.native-shell .vote-page #vote-card{height:100%!important;min-height:0!important}"
         let script = "const style=document.createElement('style');style.textContent=" + String(data: try! JSONEncoder().encode(css), encoding: .utf8)! + ";document.head.appendChild(style);"
         model.webView.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-        model.open("vote")
+        model.webView.configuration.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "shareImage")
+        let args = ProcessInfo.processInfo.arguments
+        let start = args.firstIndex(of: "--preview-section").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? "vote"
+        model.open(["vote", "discover", "submit", "profile"].contains(start) ? start : "vote")
         return model.webView
     }
     func updateUIView(_ uiView: WKWebView, context: Context) {}
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandlerWithReply {
         let model: BrowserModel
         init(_ model: BrowserModel) { self.model = model }
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage, replyHandler: @escaping (Any?, String?) -> Void) {
+            guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == site.host,
+                  let body = message.body as? [String: Any], let raw = body["image"] as? String,
+                  raw.hasPrefix("data:image/png;base64,"), raw.count < 17_000_000,
+                  let bytes = Data(base64Encoded: String(raw.dropFirst(22))), bytes.count <= 12 * 1024 * 1024,
+                  let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+                  let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
+                  width > 0, height > 0, width <= 4096, height <= 4096,
+                  let image = UIImage(data: bytes) else { replyHandler(nil, "Image unavailable."); return }
+            guard var presenter = model.webView.window?.rootViewController else { replyHandler(nil, "Please try again."); return }
+            while let presented = presenter.presentedViewController { presenter = presented }
+            guard !(presenter is UIActivityViewController) else { replyHandler(nil, "A share menu is already open."); return }
+            var items: [Any] = [image]
+            if let text = body["text"] as? String, !text.isEmpty { items.append(String(text.prefix(500))) }
+            if let rawURL = body["url"] as? String, let url = URL(string: rawURL), url.scheme == "https", url.host == site.host { items.append(url) }
+            let sheet = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            sheet.popoverPresentationController?.sourceView = model.webView
+            sheet.popoverPresentationController?.sourceRect = CGRect(x: model.webView.bounds.midX, y: model.webView.bounds.midY, width: 1, height: 1)
+            sheet.completionWithItemsHandler = { _, completed, _, error in
+                if let error = error { replyHandler(nil, error.localizedDescription) } else { replyHandler(["cancelled": !completed], nil) }
+            }
+            presenter.present(sheet, animated: true)
+        }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { model.loading = true; model.failure = nil }
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { model.loading = false }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error) }
