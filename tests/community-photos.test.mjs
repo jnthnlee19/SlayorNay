@@ -23,6 +23,7 @@ test('image retirement preserves products and votes; photos stay private until a
  await db.query("INSERT INTO users(id,username,password_hash,recovery_hash,is_admin) VALUES('owner','owner','test','test',true),('member','member','test','test',false),('other','other','test','test',false)");
  await db.query("INSERT INTO votes(user_id,product_id,choice) VALUES('member','cnd-solaroil','slay')");
  await db.exec(await readFile('netlify/database/migrations/202609100001_community_photos.sql','utf8'));
+await db.exec(await readFile('netlify/database/migrations/202609120002_app_readiness.sql','utf8'));
  assert.equal((await db.query("SELECT count(*)::int n FROM products WHERE image<>''")).rows[0].n,0);
  assert.equal((await db.query('SELECT count(*)::int n FROM retired_product_images')).rows[0].n,4);
  assert.equal((await db.query('SELECT count(*)::int n FROM votes')).rows[0].n,1);

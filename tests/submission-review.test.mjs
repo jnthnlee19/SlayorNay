@@ -9,7 +9,7 @@ import {PHOTO_CONSENT_VERSION} from '../public/photo-tools.mjs';
 test('review edits stay private, retain originals and permissions, and publish edited content only on approval',async()=>{
  const db=new PGlite();
  try{
- for(const file of ['202609060001_initial.sql','202609080001_email_identity.sql','202609090002_watchlist.sql','202609100001_community_photos.sql','202609120001_submission_review_edits.sql'])await db.exec(await readFile('netlify/database/migrations/'+file,'utf8'));
+ for(const file of ['202609060001_initial.sql','202609080001_email_identity.sql','202609090002_watchlist.sql','202609100001_community_photos.sql','202609120001_submission_review_edits.sql','202609120002_app_readiness.sql'])await db.exec(await readFile('netlify/database/migrations/'+file,'utf8'));
  const owner=await seedIdentity(db,'review_owner',true),member=await seedIdentity(db,'review_member'),other=await seedIdentity(db,'review_other');
  const blobs=new Map(),api=createApi({query:async(s,p)=>(await db.query(s,p)).rows,media:{get:async k=>blobs.get(k),set:async(k,v)=>blobs.set(k,v)}});
  const call=(path,user,body)=>api(new Request('https://example.test/api'+path,{headers:{origin:'https://example.test','content-type':'application/json'},...(body?{method:'POST',body:JSON.stringify(body)}:{})}),{identityUser:user,ip:'review-test'});

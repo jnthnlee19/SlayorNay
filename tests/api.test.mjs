@@ -7,6 +7,7 @@ import { createApi } from '../server/api.mjs';
 const db=new PGlite();
 await db.exec(await readFile('netlify/database/migrations/202609060001_initial.sql','utf8'));
 await db.exec(await readFile('netlify/database/migrations/202609100001_community_photos.sql','utf8'));
+await db.exec(await readFile('netlify/database/migrations/202609120002_app_readiness.sql','utf8'));
 await db.exec(await readFile('netlify/database/migrations/202609090002_watchlist.sql','utf8'));
 await db.exec(await readFile('netlify/database/migrations/202609080001_email_identity.sql','utf8'));
 const adminToken='test-only-admin-setup-token-000000000000000';
