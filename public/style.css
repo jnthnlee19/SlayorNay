@@ -352,3 +352,39 @@ body{background:radial-gradient(ellipse at 90% 0,#39132366,transparent 42%),#0b0
 .explore-item{min-width:0;scroll-snap-align:start}
 .explore-empty{padding:18px;border:1px solid #c66a8a55;border-radius:14px;color:#ead6e0}
 @media(max-width:680px){.explore-rail{grid-auto-columns:78%;gap:12px}}
+
+/* The Vote is always a viewport-sized desk. Other routes retain their scrolling. */
+body.vote-page{height:100dvh;overflow:hidden;padding:0;--vote-nav-height:74px}
+.vote-page header,.vote-page footer{display:none}
+.vote-page main{height:100dvh;min-height:0;max-width:480px;display:flex;flex-direction:column;gap:6px;padding:env(safe-area-inset-top,0px) 12px calc(var(--vote-nav-height) + env(safe-area-inset-bottom,0px) + 8px)}
+.vote-logo{flex:none;height:56px;display:flex;align-items:center}
+.vote-logo a,.vote-logo img{display:block;width:56px;height:56px;object-fit:contain}
+.vote-page .vote-category-control{flex:none;flex-wrap:nowrap;gap:8px;margin:0 0 4px;min-width:0}
+.vote-page .vote-category-control label{flex-basis:auto;font-size:12px;flex:0 1 auto}
+.vote-page .vote-category-control select{flex:1;min-width:0;width:auto;padding:8px;margin:0}
+.vote-page .vote-category-control p{display:none}
+.vote-page .vote-layout{display:flex!important;flex:1;min-height:0}
+.vote-page #voting-surface{height:100%;min-height:0;max-width:440px}
+.vote-page #voting-surface #vote-card{height:100%!important;min-height:0!important;width:100%;box-shadow:none;display:flex;flex-direction:column}
+.vote-page #vote-card .product-stage{position:relative;inset:auto;flex:1;min-height:0;height:auto;background:none}
+.vote-page #vote-card .product-stage>img{inset:40px 0 0;width:100%;height:calc(100% - 40px);padding:0;object-fit:contain}
+.vote-page #vote-card .vote-info{position:relative;inset:auto;flex:none;padding:6px 12px;background:none}
+.vote-page #vote-card .vote-info .trend,.vote-page #vote-card .vote-info>p{display:none}
+.vote-page #vote-card .product-title h2{font-size:17px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.vote-page #vote-card .brand{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vote-page #vote-card .product-stage>.photo-invite{inset:65px 62px 4px 8px;gap:6px;padding:4px}
+.vote-page #vote-card .photo-invite strong{font-size:20px}.vote-page #vote-card .photo-invite svg{width:30px;height:30px}
+.vote-page #vote-card .photo-invite a{padding:9px;font-size:12px}
+.vote-page .bottom-nav{position:fixed;display:flex;bottom:0;left:0;right:0;height:calc(var(--vote-nav-height) + env(safe-area-inset-bottom,0px));z-index:8;background:#100d10f5;border-top:1px solid #503443;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));justify-content:space-around;gap:5px}
+.vote-page .bottom-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:11px;color:#baaab4}
+.vote-page .bottom-nav svg{width:24px;height:24px}.vote-page .bottom-nav a[aria-current=page]{color:#f2cad6;text-decoration:none}
+.vote-page #toast{bottom:calc(var(--vote-nav-height) + env(safe-area-inset-bottom,0px) + 8px)}
+.vote-page #voting-surface>.empty{padding:12px 6px;height:100%;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.vote-page #voting-surface>.empty h2{font-size:22px}.vote-page #voting-surface>.empty p{font-size:13px;margin:4px 0}
+/* The native shell already supplies its own logo and fixed tab bar. */
+.native-shell body.vote-page{--vote-nav-height:0px}
+.native-shell .vote-page main{padding:4px 12px 8px!important}
+.native-shell .vote-page .vote-logo{display:none}
+@media(max-height:650px){.vote-page .vote-logo,.vote-page .vote-logo img,.vote-page .vote-logo a{height:40px;width:40px}.vote-page #vote-card .vote-actions button{min-height:44px;font-size:21px;padding:6px}.vote-page #vote-card .product-title h2{font-size:15px;padding:3px 6px}.vote-page #vote-card .photo-invite span,.vote-page #vote-card .photo-invite svg{display:none}.vote-page #vote-card .photo-invite strong{font-size:16px}.vote-page #vote-card .card-top-actions{gap:4px}.vote-page #vote-card .card-top-actions button{width:38px;height:38px;min-height:38px}}
+
+@media(max-height:480px){body.vote-page{--vote-nav-height:56px}.vote-page main{gap:3px}.vote-page .vote-logo,.vote-page .vote-logo img,.vote-page .vote-logo a{height:30px;width:30px}.vote-page .vote-category-control select{padding:4px 8px}.vote-page #vote-card .card-top-actions{flex-direction:row;width:auto;top:38px;right:8px}.vote-page #vote-card .photo-invite{right:12px!important;top:40px!important}.vote-page #vote-card .photo-invite strong{display:none}.native-shell body.vote-page{--vote-nav-height:0px}}
