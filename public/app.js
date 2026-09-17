@@ -18,7 +18,7 @@ const percent=p=>p.total?Math.round(p.slays/p.total*100):null;
 const result=p=>p.total?`${percent(p)}% Gloss`:'No votes yet';
 const votes=p=>`${p.total} ${p.total===1?'vote':'votes'}`;
 const product=id=>state.products.find(p=>p.id===id&&p.active===true);
-const photo=(p,cls='')=>p.image?`<img data-product-photo="${esc(p.id)}" class="${cls}" src="${esc(p.image)}" alt="${esc(p.brand+' '+p.name)}" loading="lazy" referrerpolicy="no-referrer">`:photoPlaceholder(p);
+const photo=(p,cls='')=>p.image?`<img data-product-photo="${esc(p.id)}" class="${cls}" src="${esc(p.image)}" alt="${esc(p.brand+' '+p.name)}" loading="${route()==='vote'?'eager':'lazy'}" referrerpolicy="no-referrer">`:photoPlaceholder(p);
 
 function verdictBadge(p){const key=p.verdict||'pending',labels={pending:'Too soon to tell',nay:'× Toss',slay:'✳ Gloss',grail:'♛ Holy Grail'};return `<span data-verdict="${esc(p.id)}" class="verdict-badge verdict-${key}">${labels[key]}</span>`;}
 function trendBadge(p){const t=p.trend||{direction:'pending'},labels={pending:'Not enough recent votes',up:'↗ Trending up',down:'↘ Trending down',steady:'→ Holding steady'};const info=t.change===null||t.change===undefined?'Needs 5 votes in each 24-hour window.':`${t.change>0?'+':''}${t.change} percentage points in Gloss share: latest 24 hours vs previous 24 hours.`;return `<span data-trend="${esc(p.id)}" class="trend trend-${t.direction}" title="${esc(info)}">${labels[t.direction]}</span>`;}
@@ -122,7 +122,32 @@ document.addEventListener('submit',async e=>{
  }catch(err){error.textContent=err.message;}finally{button.disabled=false;}
 });
 window.addEventListener('hashchange',async()=>{if(await processEmailCallback())return;render();window.scrollTo({top:0});});
-document.addEventListener('error',e=>{if(e.target.tagName==='IMG'){if(e.target.hasAttribute('data-admin-thumb')){e.target.remove();return;}if(e.target.dataset.productPhoto){const p=product(e.target.dataset.productPhoto);if(p){const target=e.target.closest('.tile-image-button')||e.target;target.outerHTML=photoPlaceholder(p);return;}}e.target.replaceWith(Object.assign(document.createElement('div'),{className:'form-note',textContent:'Photo unavailable'}));}},true);
+// A network failure is not a missing product photo. Retry without changing the deck.
+function retryProductPhoto(img){
+ const id=img.dataset.productPhoto,source=img.getAttribute('src');
+ if(img.dataset.photoRetried)return false;
+ img.dataset.photoRetried='true';
+ setTimeout(()=>{if(img.isConnected&&product(id)?.image===source){img.loading='eager';img.src=source;}},700);
+ return true;
+}
+document.addEventListener('error',e=>{
+ const img=e.target;if(img.tagName!=='IMG')return;
+ if(img.hasAttribute('data-admin-thumb')){img.remove();return;}
+ if(img.dataset.productPhoto){
+  const p=product(img.dataset.productPhoto);if(!p)return;
+  if(retryProductPhoto(img))return;
+  // Keep an outer product link intact; the retry button stops its click below.
+  img.outerHTML=`<div class="photo-invite"><strong>Photo couldn’t load</strong><button type="button" data-retry-photo="${esc(p.id)}">Retry photo</button></div>`;
+  return;
+ }
+ img.replaceWith(Object.assign(document.createElement('div'),{className:'form-note',textContent:'Photo unavailable'}));
+},true);
+document.addEventListener('click',e=>{
+ const button=e.target.closest('[data-retry-photo]');if(!button)return;
+ e.preventDefault();e.stopImmediatePropagation();
+ const p=product(button.dataset.retryPhoto);if(p)button.closest('.photo-invite').outerHTML=photo(p);
+},true);
+
 async function init(throwOnError=false){const request=++initRequest;++catalogRequest;state.admin=null;state.products=[];state.queue=[];state.index=0;$('#main').innerHTML='<div class="loading">Getting the products ready…</div>';try{const me=await api('/me');if(request!==initRequest)return;state.user=me.user;state.deletionPending=me.deletionPending;state.emailIdentityEnabled=me.emailIdentityEnabled;if(me.preview){$('#preview-note').hidden=false;$('#preview-note').textContent='Private development preview · Accounts and votes here are separate from the live site.';}await refresh();if(request!==initRequest)return;resetQueue();await render();}catch(e){if(request!==initRequest)return;if(throwOnError)throw e;$('#main').innerHTML=`<div class="empty"><h1>Almost at the nail desk.</h1><p>${esc(e.message)}</p><button class="pink" data-action="retry">Try again</button></div>`;}}
 if(document.modelContext?.registerTool){
  const lifecycle=new AbortController();
