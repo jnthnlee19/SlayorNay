@@ -18,6 +18,18 @@ export function communityRating(p){
  const change=ready?100*(p.recent_slays/p.recent_total-p.previous_slays/p.previous_total):null;
  return {...p,verdict,trend:{direction:!ready?'pending':change>=5-1e-9?'up':change<=-5+1e-9?'down':'steady',change:ready?Math.round(change*10)/10:null}};
 }
+// Stored product photos are already public. Pending submission keys never match.
+export function storedPhotoKey(request){
+ if(request.method!=='GET')return null;
+ const path=new URL(request.url).pathname.replace(/^\/\.netlify\/functions\/api/,'').replace(/^\/api/,'');
+ return path.match(/^\/images\/([a-f0-9-]{36}\.webp)$/)?.[1]||null;
+}
+export async function storedPhotoResponse(key,media){
+ const image=await media?.get(key);
+ if(!image)return Response.json({error:'Photo not found.'},{status:404,headers:{'Cache-Control':'no-store'}});
+ // Replacements receive new UUIDs, so they do not reuse a cached photo URL.
+ return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}});
+}
 export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN,media,lookup=lookupProduct,sharePhoto=fetchSharePhoto}){
  const sharePhotoCache=new Map();
  return async function handle(request,context={}){
@@ -45,10 +57,8 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }
     return new Response(bytes,{headers:{'Content-Type':'image/png','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}});
    }
-   if(request.method==='GET'&&/^\/images\/[a-f0-9-]{36}\.webp$/.test(path)){
-    const image=await media?.get(path.slice('/images/'.length));if(!image)fail(404,'Photo not found.');
-    return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
-   }
+   const photoKey=storedPhotoKey(request);
+   if(photoKey)return await storedPhotoResponse(photoKey,media);
    let body={};
    if(request.method==='POST'){
     if(request.headers.get('origin')!==url.origin)fail(403,'Please submit this from the website.');
