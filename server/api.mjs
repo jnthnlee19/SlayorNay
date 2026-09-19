@@ -168,6 +168,12 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     for(const name of [cookieName,'nf_jwt','nf_refresh'])response.headers.append('Set-Cookie',`${name}=; Path=/; SameSite=Lax; Max-Age=0${secure?'; Secure':''}`);
     return response;
    }
+   if(request.method==='POST'&&path==='/vote/remove'){
+    requireVoter();await rate('vote:'+user.id,120,60);
+    const id=clean(body.product_id,100);if(!id)fail(400,'Choose a product.');
+    await rows('DELETE FROM votes WHERE user_id=$1 AND product_id=$2',[user.id,id]);
+    return json({ok:true});
+   }
    if(request.method==='POST'&&path==='/vote/change'){
     requireVoter();await rate('vote:'+user.id,120,60);
     if(!['slay','nay'].includes(body.choice))fail(400,'Choose Gloss or Toss.');
