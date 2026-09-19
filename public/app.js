@@ -18,7 +18,7 @@ const percent=p=>p.total?Math.round(p.slays/p.total*100):null;
 const result=p=>p.total?`${percent(p)}% Gloss`:'No votes yet';
 const votes=p=>`${p.total} ${p.total===1?'vote':'votes'}`;
 const product=id=>state.products.find(p=>p.id===id&&p.active===true);
-const photo=(p,cls='')=>p.image?`<img data-product-photo="${esc(p.id)}" class="${cls}" src="${esc(p.image)}" alt="${esc(p.brand+' '+p.name)}" loading="${route()==='vote'?'eager':'lazy'}" referrerpolicy="no-referrer">`:photoPlaceholder(p);
+const photo=(p,cls='')=>p.image?`<img data-product-photo="${esc(p.id)}" class="${cls}" src="${esc(p.image)}" alt="${esc(p.brand+' '+p.name)}" loading="${route()==='vote'?'eager':'lazy'}" fetchpriority="${route()==='vote'?'high':'auto'}" referrerpolicy="no-referrer">`:photoPlaceholder(p);
 
 function verdictBadge(p){const key=p.verdict||'pending',labels={pending:'Too soon to tell',nay:'× Toss',slay:'✳ Gloss',grail:'♛ Holy Grail'};return `<span data-verdict="${esc(p.id)}" class="verdict-badge verdict-${key}">${labels[key]}</span>`;}
 function trendBadge(p){const t=p.trend||{direction:'pending'},labels={pending:'Not enough recent votes',up:'↗ Trending up',down:'↘ Trending down',steady:'→ Holding steady'};const info=t.change===null||t.change===undefined?'Needs 5 votes in each 24-hour window.':`${t.change>0?'+':''}${t.change} percentage points in Gloss share: latest 24 hours vs previous 24 hours.`;return `<span data-trend="${esc(p.id)}" class="trend trend-${t.direction}" title="${esc(info)}">${labels[t.direction]}</span>`;}
