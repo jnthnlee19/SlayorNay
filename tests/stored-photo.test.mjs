@@ -9,7 +9,7 @@ test('only exact public photo GETs bypass authenticated API handling',()=>{
 });
 test('stored photos use bounded private caching; missing photos are never cached',async()=>{
  const bytes=new Uint8Array([1,2,3]);const response=await storedPhotoResponse(key,{get:async()=>bytes});
- assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'private, max-age=300');
+ assert.equal(response.status,200);assert.equal(response.headers.get('Cache-Control'),'private, max-age=86400');
  assert.deepEqual(new Uint8Array(await response.arrayBuffer()),bytes);
  const missing=await storedPhotoResponse(key,{get:async()=>null});assert.equal(missing.status,404);assert.equal(missing.headers.get('Cache-Control'),'no-store');
 });
