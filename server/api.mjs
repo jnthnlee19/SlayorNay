@@ -28,7 +28,7 @@ export async function storedPhotoResponse(key,media){
  const image=await media?.get(key);
  if(!image)return Response.json({error:'Photo not found.'},{status:404,headers:{'Cache-Control':'no-store'}});
  // Replacements receive new UUIDs, so they do not reuse a cached photo URL.
- return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}});
+ return new Response(image,{headers:{'Content-Type':'image/webp','Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'}});
 }
 export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETUP_TOKEN,media,lookup=lookupProduct,sharePhoto=fetchSharePhoto}){
  const sharePhotoCache=new Map();
@@ -55,7 +55,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      if(sharePhotoCache.size>=12)sharePhotoCache.delete(sharePhotoCache.keys().next().value);
      sharePhotoCache.set(key,{bytes,expires:Date.now()+300000});
     }
-    return new Response(bytes,{headers:{'Content-Type':'image/png','Cache-Control':'private, max-age=300','X-Content-Type-Options':'nosniff'}});
+    return new Response(bytes,{headers:{'Content-Type':'image/png','Cache-Control':'private, max-age=86400','X-Content-Type-Options':'nosniff'}});
    }
    const photoKey=storedPhotoKey(request);
    if(photoKey)return await storedPhotoResponse(photoKey,media);
