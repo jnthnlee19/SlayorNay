@@ -98,7 +98,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     if(!tokens.access_token||!tokens.refresh_token)fail(503,'Sign-in could not be completed.');
     const response=json({ok:true});
     // Same cookie contract as the Netlify browser client, which manages refresh.
-    for(const [name,value] of [['nf_jwt',tokens.access_token],['nf_refresh',tokens.refresh_token]])response.headers.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/; Secure; SameSite=Lax`);
+    for(const [name,value] of [['nf_jwt',tokens.access_token],['nf_refresh',tokens.refresh_token]])response.headers.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/; Secure; SameSite=Lax; Max-Age=2592000`);
     return response;
    }
    if(request.method==='POST'&&path==='/identity/session'){
