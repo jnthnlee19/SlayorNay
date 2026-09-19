@@ -106,9 +106,9 @@ async function revealVotePhoto(snapshot,kind='peel',back=false){
    document.body.append(layer);layers.push(layer);
    const direction=side?1:-1;
    const frames=kind==='rip'?[{transform:'translateX(0) rotate(0)',opacity:1},{transform:`translateX(${direction*65}%) rotate(${direction*12}deg)`,opacity:0}]:[{transform:'perspective(900px) rotateY(0deg)',filter:'brightness(1)',opacity:1},{transform:`perspective(900px) rotateY(${back?105:-105}deg)`,filter:'brightness(.75)',opacity:0}];
-   layer.animate(frames,{duration:kind==='rip'?340:320,easing:'cubic-bezier(.2,.7,.2,1)',fill:'forwards'});
+   layer.animate(frames,{duration:kind==='rip'?340:420,easing:'cubic-bezier(.2,.7,.2,1)',fill:'forwards'});
   }
-  await new Promise(resolve=>setTimeout(resolve,350));
+  await new Promise(resolve=>setTimeout(resolve,kind==='rip'?350:430));
  }catch{/* A decorative effect must never interrupt a saved vote. */}finally{layers.forEach(layer=>layer.remove());}
 }
 async function castVote(id,choice){if(state.busy)return;if(!state.user){auth('signup');return;}state.busy=true;const buttons=document.querySelectorAll('[data-vote]');buttons.forEach(b=>b.disabled=true);try{await api('/vote',{product_id:id,choice});if($('#modal').open)$('#modal').close();const snapshot=state.queue[state.index]===id?captureVotePhoto():null;if(state.queue[state.index]===id)state.index++;await refresh();await render();await revealVotePhoto(snapshot,choice==='nay'?'rip':'peel');state.lastVote={...product(id),my_vote:choice};showVoteSharePrompt(state.lastVote);}catch(e){toast(e.message);if(e.status===401){state.user=null;updateAccount();auth();}if(e.status===409){await refresh();resetQueue();await render();}}finally{state.busy=false;document.querySelectorAll('[data-vote]').forEach(b=>b.disabled=false);}}
