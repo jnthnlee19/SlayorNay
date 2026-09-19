@@ -11,7 +11,7 @@ function loadImage(src){
  return new Promise((resolve,reject)=>{
   const image=new Image();let timer;
   image.onload=()=>{clearTimeout(timer);resolve(image);};
-  image.onerror=()=>{clearTimeout(timer);reject(new Error(src==='/logo.png'?'The Gloss or Toss logo could not be loaded. Please try again.':'The product photo could not be loaded.'));};
+  image.onerror=()=>{clearTimeout(timer);reject(new Error(src==='/wordmark.png'?'The Gloss or Toss logo could not be loaded. Please try again.':'The product photo could not be loaded.'));};
   timer=setTimeout(()=>{image.onload=image.onerror=null;reject(new Error('The image took too long to load.'));},12000);
   image.src=src;
  });
@@ -33,10 +33,10 @@ export async function generateShareImage(product,{width=1080,height=1920}={}){
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Image generation is unavailable in this browser.');
  const scale=width/1080,H=height/scale;ctx.scale(scale,scale);
  // The endpoint resolves the approved catalog image; the revision avoids stale browser caches after replacement.
- const [logo,photo]=await Promise.all([loadImage('/logo.png'),product.image?loadImage('/api/share-photo/'+encodeURIComponent(product.id)+'?image='+encodeURIComponent(product.image)).catch(()=>null):null]);
+ const [logo,photo]=await Promise.all([loadImage('/wordmark.png'),product.image?loadImage('/api/share-photo/'+encodeURIComponent(product.id)+'?image='+encodeURIComponent(product.image)).catch(()=>null):null]);
  const bg=ctx.createLinearGradient(0,0,1080,H);bg.addColorStop(0,theme["bg-main"]);bg.addColorStop(.6,theme["pink-soft"]);bg.addColorStop(1,theme["bg-main"]);ctx.fillStyle=bg;ctx.fillRect(0,0,1080,H);
  const header=Math.min(220,H*.16),footer=Math.min(model.choice?560:460,H*.42),photoY=header+28,photoH=H-footer-photoY-20;
- contain(ctx,logo,48,18,header,header);
+ contain(ctx,logo,48,18,650,header-20);
  ctx.textAlign='right';ctx.fillStyle=theme["pink-primary"];ctx.font='500 24px Arial';ctx.fillText('REAL REVIEWS.',1020,header*.43);ctx.fillText('FLAWLESS NAILS.',1020,header*.43+35);
  ctx.strokeStyle=theme["pink-muted"];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(60,header+8);ctx.lineTo(1020,header+8);ctx.stroke();
  box(ctx,48,photoY,984,photoH,32,theme["surface"]);
