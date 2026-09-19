@@ -46,12 +46,13 @@ struct MainView: View {
     @State private var section = initialSection
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                AsyncImage(url: URL(string: "https://glossortoss.com/logo.png")) { image in image.resizable().scaledToFit() } placeholder: { ProgressView() }.frame(width: 64, height: 64).accessibilityLabel("Gloss or Toss")
-                Spacer()
-
-                ShareLink(item: site) { Image(systemName: "square.and.arrow.up") }.accessibilityLabel("Share Gloss or Toss")
-            }.padding(.horizontal).padding(.vertical, 10)
+            HStack(spacing: 8) {
+                Image("Wordmark").resizable().scaledToFit()
+                    .frame(maxWidth: .infinity).frame(height: 60)
+                    .accessibilityLabel("Gloss or Toss")
+                ShareLink(item: site) { Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44) }
+                    .accessibilityLabel("Share Gloss or Toss")
+            }.padding(.horizontal, 12).padding(.vertical, 4)
             ZStack {
                 SiteView(model: browser)
                 if browser.loading { ProgressView("Loading…").padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12)) }
