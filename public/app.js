@@ -60,8 +60,8 @@ async function api(path,body){if(state.emailIdentityEnabled&&!['/email-signin','
 function toast(message){$('#toast').textContent=message;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),4000);}
 function accountLabel(){return state.user?.id.startsWith('identity:')?'Your account':'@'+(state.user?.username||'');}
 function updateAccount(){$('#account-button').textContent=state.user?accountLabel():'Sign in ↗';}
-async function refresh(){
- const request=++catalogRequest,data=await api('/products');if(request!==catalogRequest)return false;
+async function refresh(loadedCatalog){
+ const request=++catalogRequest,data=loadedCatalog||await api('/products');if(request!==catalogRequest)return false;
  const previous=state.queue[state.index];state.products=visibleProducts(data.products);
  Object.assign(state,reconcileQueue(state.queue,state.index,state.products));
  categories.splice(0,categories.length,...new Set(state.products.map(p=>p.category)));
@@ -172,7 +172,7 @@ document.addEventListener('click',e=>{
  const p=product(button.dataset.retryPhoto);if(p)button.closest('.photo-invite').outerHTML=photo(p);
 },true);
 
-async function init(throwOnError=false){const request=++initRequest;++catalogRequest;state.admin=null;state.products=[];state.queue=[];state.index=0;$('#main').innerHTML='<div class="loading">Getting the products ready…</div>';try{const me=await api('/me');if(request!==initRequest)return;state.user=me.user;state.deletionPending=me.deletionPending;state.emailIdentityEnabled=me.emailIdentityEnabled;if(me.preview){$('#preview-note').hidden=false;$('#preview-note').textContent='Private development preview · Accounts and votes here are separate from the live site.';}await refresh();if(request!==initRequest)return;resetQueue();await render();}catch(e){if(request!==initRequest)return;if(throwOnError)throw e;$('#main').innerHTML=`<div class="empty"><h1>Almost at the nail desk.</h1><p>${esc(e.message)}</p><button class="pink" data-action="retry">Try again</button></div>`;}}
+async function init(throwOnError=false){const request=++initRequest;++catalogRequest;state.admin=null;state.products=[];state.queue=[];state.index=0;$('#main').innerHTML='<div class="loading">Getting the products ready…</div>';try{const [me,catalog]=await Promise.all([api('/me'),api('/products')]);if(request!==initRequest)return;state.user=me.user;state.deletionPending=me.deletionPending;state.emailIdentityEnabled=me.emailIdentityEnabled;if(me.preview){$('#preview-note').hidden=false;$('#preview-note').textContent='Private development preview · Accounts and votes here are separate from the live site.';}await refresh(catalog);if(request!==initRequest)return;resetQueue();await render();}catch(e){if(request!==initRequest)return;if(throwOnError)throw e;$('#main').innerHTML=`<div class="empty"><h1>Almost at the nail desk.</h1><p>${esc(e.message)}</p><button class="pink" data-action="retry">Try again</button></div>`;}}
 if(document.modelContext?.registerTool){
  const lifecycle=new AbortController();
  window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
