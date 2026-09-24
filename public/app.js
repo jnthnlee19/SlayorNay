@@ -1,5 +1,6 @@
 import {visibleProducts,reconcileQueue,adminProducts} from './catalog-tools.mjs';
 import {exploreSections} from './explore-rankings.mjs';
+import {showVoteWelcome} from './vote-welcome.mjs';
 document.documentElement.classList.toggle('native-shell',new URLSearchParams(location.search).get('native')==='ios');
 const voteSymbol=choice=>'<img class="vote-symbol" src="/'+(choice==='slay'?'gloss':'toss')+'-symbol.svg" alt="" aria-hidden="true">';
 import {PHOTO_CONSENT, PHOTO_CONSENT_VERSION, photoFilename, matchPhotoFilename} from './photo-tools.mjs';
@@ -471,6 +472,7 @@ document.addEventListener('click',async e=>{
 document.addEventListener('click',e=>{if(photoBatchBusy&&e.target.closest('[data-action="close"]')){e.preventDefault();e.stopImmediatePropagation();}},true);
 $('#modal').addEventListener('cancel',e=>{if(photoBatchBusy)e.preventDefault();});
 
+showVoteWelcome();
 await startAuthentication();
 
 function profileStats(stats){

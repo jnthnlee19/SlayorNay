@@ -519,3 +519,18 @@ footer .wordmark img{width:240px;height:54px;border-radius:0}
 }
 @media(max-height:650px){.vote-page .vote-logo{height:48px}}
 @media(max-height:480px){.vote-page .vote-logo{height:34px}}
+
+/* First-visit invitation; the voting photo continues loading underneath. */
+dialog.vote-welcome{border:1px solid #EFD9E4;border-radius:28px;padding:0;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;background:#FFEEF2;color:#1A1A1A;box-shadow:0 24px 90px #1a1a1a33}
+dialog.vote-welcome::backdrop{background:#FFEEF2e8}
+.welcome-content{padding:32px 24px;text-align:center}
+.welcome-content>img{width:100%;height:auto;max-height:72px;object-fit:contain;margin-bottom:28px}
+.welcome-eyebrow{font-size:10px;letter-spacing:1.7px;font-weight:700;color:#825266}
+.welcome-content h1{font-size:clamp(28px,7vw,38px);line-height:1.1;margin:16px 0}
+.welcome-content>p{font-size:15px;margin:12px 0 22px}
+.welcome-start{width:100%;min-height:50px;border-radius:16px;background:#FF2D8D;color:white;border:0;font-size:17px;font-weight:700}
+.welcome-start:disabled{opacity:.75}
+.welcome-content .welcome-status{font-size:12px;line-height:1.5;margin:16px 0 0;color:#65515a}
+.welcome-recovery{margin-top:18px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;font-size:13px}
+.welcome-recovery[hidden],.welcome-start[hidden]{display:none}
+@media(max-height:550px){.welcome-content{padding:18px}.welcome-content>img{max-height:42px;margin-bottom:10px}.welcome-content h1{font-size:26px;margin:10px 0}}
