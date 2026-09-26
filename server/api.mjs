@@ -240,7 +240,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
     }
     if(request.method==='GET'&&path==='/admin/users'){
      const search=clean(url.searchParams.get('search'),254),offset=Math.max(0,Math.min(1000000,Number.parseInt(url.searchParams.get('offset')||'0',10)||0));
-     return json({users:await rows(`SELECT u.id,u.username,i.email,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u JOIN identity_links i ON i.user_id=u.id WHERE strpos(lower(u.username),$1)>0 OR strpos(lower(i.email),$1)>0 ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset])});
+     return json({users:await rows(`SELECT u.id,u.username,i.email,u.is_admin,u.created_at,(SELECT count(*)::int FROM votes v WHERE v.user_id=u.id) AS vote_count FROM users u JOIN identity_links i ON i.user_id=u.id WHERE (strpos(lower(u.username),$1)>0 OR strpos(lower(i.email),$1)>0) AND (NOT $3::boolean OR (u.created_at>=now()-interval '7 days' AND u.created_at<=now())) ORDER BY u.created_at DESC,u.id LIMIT 51 OFFSET $2`,[search.toLowerCase(),offset,url.searchParams.get('scope')==='new'])});
     }
     if(request.method==='GET'&&path==='/admin/user-access')return json(await manageUser({rows,provider:context.identityAdmin,actor:user,id:clean(url.searchParams.get('id'),100),action:'inspect'}));
     if(request.method==='POST'&&path==='/admin/user-action'){
@@ -259,7 +259,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
      const updated=await rows('UPDATE products SET image=$2 WHERE id=$1 RETURNING id',[id,image]);
      if(!updated.length)fail(404,'Product not found.');return json({ok:true});
     }
-    if(request.method==='GET'&&path==='/admin/data')return json({products:await rows('SELECT * FROM products ORDER BY created_at DESC'),submissions:await rows("SELECT s.*,COALESCE(u.username,'Deleted account') AS username FROM submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='pending' ORDER BY s.created_at")});
+    if(request.method==='GET'&&path==='/admin/data')return json({user_counts:(await rows("SELECT count(*)::int AS total,count(*) FILTER(WHERE u.created_at>=now()-interval '7 days' AND u.created_at<=now())::int AS recent FROM users u WHERE EXISTS(SELECT 1 FROM identity_links i WHERE i.user_id=u.id)"))[0],products:await rows('SELECT * FROM products ORDER BY created_at DESC'),submissions:await rows("SELECT s.*,COALESCE(u.username,'Deleted account') AS username FROM submissions s LEFT JOIN users u ON u.id=s.user_id WHERE s.status='pending' ORDER BY s.created_at")});
     if(request.method==='POST'&&path==='/admin/products'){
      const p=productInput(body);const id=clean(body.id,100)||randomUUID();
      const found=await rows('SELECT id FROM products WHERE id=$1',[id]);
