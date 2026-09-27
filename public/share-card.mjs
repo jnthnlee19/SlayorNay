@@ -33,9 +33,9 @@ export async function generateShareImage(product,{width=1080,height=1920}={}){
  const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Image generation is unavailable in this browser.');
  const scale=width/1080,H=height/scale;ctx.scale(scale,scale);
  // The endpoint resolves the approved catalog image; the revision avoids stale browser caches after replacement.
- const [logo,photo]=await Promise.all([loadImage('/wordmark.png'),product.image?loadImage('/api/share-photo/'+encodeURIComponent(product.id)+'?image='+encodeURIComponent(product.image)).catch(()=>null):null]);
+ const [logo,photo,appStoreBadge]=await Promise.all([loadImage('/wordmark.png'),product.image?loadImage('/api/share-photo/'+encodeURIComponent(product.id)+'?image='+encodeURIComponent(product.image)).catch(()=>null):null,loadImage('/app-store-badge.svg').catch(()=>null)]);
  const bg=ctx.createLinearGradient(0,0,1080,H);bg.addColorStop(0,theme["bg-main"]);bg.addColorStop(.6,theme["pink-soft"]);bg.addColorStop(1,theme["bg-main"]);ctx.fillStyle=bg;ctx.fillRect(0,0,1080,H);
- const header=Math.min(220,H*.16),footer=Math.min(model.choice?560:460,H*.42),photoY=header+28,photoH=H-footer-photoY-20;
+ const header=Math.min(220,H*.16),footer=Math.min(model.choice?660:560,H*.50),photoY=header+28,photoH=H-footer-photoY-20;
  contain(ctx,logo,48,18,650,header-20);
  ctx.textAlign='right';ctx.fillStyle=theme["pink-primary"];ctx.font='500 24px Arial';ctx.fillText('REAL REVIEWS.',1020,header*.43);ctx.fillText('FLAWLESS NAILS.',1020,header*.43+35);
  ctx.strokeStyle=theme["pink-muted"];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(60,header+8);ctx.lineTo(1020,header+8);ctx.stroke();
@@ -55,8 +55,10 @@ export async function generateShareImage(product,{width=1080,height=1920}={}){
  y=pillY+pillH+54;
  if(model.choice){ctx.font='bold 36px Arial';ctx.fillStyle=theme["pink-primary"];ctx.fillText(model.percentage===null?'Awaiting community votes':model.percentage+'% GLOSS',540,y);ctx.font='24px Arial';ctx.fillStyle=theme["text-muted"];ctx.fillText(model.total.toLocaleString()+' community '+(model.total===1?'vote':'votes')+' · at time of sharing',540,y+37);y+=90;}
  else y+=32;
- ctx.fillStyle=theme["text-main"];ctx.font='italic 37px Georgia';ctx.fillText('What do you think?',540,Math.min(y,H-110));
- ctx.fillStyle=theme["pink-primary"];ctx.font='bold 29px Arial';ctx.fillText('GlossOrToss.com',540,H-48);
+ ctx.fillStyle=theme["text-main"];ctx.font='italic 37px Georgia';ctx.fillText('What do you think?',540,Math.min(y,H-200));
+ // Use Apple's unmodified badge, with clear space on every side.
+ if(appStoreBadge)contain(ctx,appStoreBadge,360,H-160,360,120);
+ else{ctx.fillStyle=theme["pink-primary"];ctx.font='bold 29px Arial';ctx.fillText('Available on the App Store',540,H-48);}
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Could not generate the share image.')),'image/png'));
  return {model,blob,photoAvailable:!!photo,file:new File([blob],'gloss-or-toss-'+String(model.name).replace(/[^a-z0-9]+/gi,'-').slice(0,60)+'.png',{type:'image/png'})};
 }
