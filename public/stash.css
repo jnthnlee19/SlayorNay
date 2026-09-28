@@ -2322,3 +2322,6 @@ body{padding-bottom:calc(90px + env(safe-area-inset-bottom,0px))}
 .stash-navigation a.nav-vote{font-size:12px;font-weight:750}
 .stash-navigation a.nav-vote svg{width:29px;height:29px}
 .native-stash body{padding-bottom:20px}
+
+#toast{bottom:calc(88px + env(safe-area-inset-bottom,0px));z-index:35}.native-stash #toast{bottom:24px}
+
