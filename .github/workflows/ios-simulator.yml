@@ -47,7 +47,7 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE" build/Build/Products/Debug-iphonesimulator/GlossOrToss.app
           mkdir -p screenshots
-          for SECTION in vote discover submit profile; do
+          for SECTION in vote discover submit profile stash; do
             xcrun simctl launch --terminate-running-process "$DEVICE" com.jnthnlee19.glossortoss --preview-section "$SECTION"
             sleep 15
             xcrun simctl io "$DEVICE" screenshot "screenshots/$SECTION.png"
