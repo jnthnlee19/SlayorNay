@@ -55,6 +55,6 @@ export async function manageUser({rows,provider,actor,id,action,confirmation,sel
    if(updated.appMetadata?.[suspendedKey]!== (action==='suspend'))failure(503,'Identity did not confirm the account status. Reopen Manage access to check before retrying.');
   }
   console.info('Admin user action completed',{actor:actor.id,target:target.id,action});
-  return {ok:true,message:selfDelete?'Your account, votes, Watchlist, and submitted photos have been deleted.':action==='delete'?'User permanently deleted. Their votes and Watchlist were removed; products and submissions were preserved.':action==='suspend'?'User suspended. Their saved data is unchanged.':'User re-enabled. They can sign in again with their saved data intact.'};
+  return {ok:true,message:selfDelete?'Your account, votes, Watchlist, My Stash, and submitted photos have been deleted.':action==='delete'?'User permanently deleted. Their votes, Watchlist, and My Stash were removed; products and submissions were preserved.':action==='suspend'?'User suspended. Their saved data is unchanged.':'User re-enabled. They can sign in again with their saved data intact.'};
  }finally{await rows('DELETE FROM settings WHERE key=$1 AND value=$2',[lockKey,lockValue]);}
 }

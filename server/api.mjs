@@ -1,3 +1,4 @@
+import {stashRequest} from './stash.mjs';
 import {manageUser,deletedKey} from './user-management.mjs';
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { lookupProduct, sanitizeImage, fetchSharePhoto, normalizeSharePhoto } from './product-media.mjs';
@@ -79,6 +80,7 @@ export function createApi({query,preview=false,adminToken=process.env.ADMIN_SETU
    const requireVoter=requireUser;
    const requireAdmin=()=>{requireUser();if(!user.is_admin)fail(403,'This page is for the site administrator.');};
    if(request.method==='GET'&&path==='/me')return json({user:publicUser(user),deletionPending:deleted&&linked?{email:verifiedIdentity.email}:null,preview,emailIdentityEnabled:true});
+   if(path==='/stash'||path.startsWith('/stash/')){requireUser();return json(await stashRequest({path,method:request.method,body,user,rows,rate}));}
    if(request.method==='GET'&&path==='/profile/stats'){
     requireUser();
     const stats=(await rows(`SELECT count(*)::int AS rated,
