@@ -546,3 +546,15 @@ dialog.vote-welcome::backdrop{background:#FFEEF2e8}
 @media(max-width:540px){.admin-section{padding:16px}.admin-section>summary{font-size:1rem}.admin-section [data-admin-user-search]{flex-wrap:wrap}}
 
 @media(max-width:540px){.admin-section [data-admin-user-search] label{flex-basis:100%}.admin-section .admin-row{flex-wrap:wrap}.admin-section .admin-row>.actions{flex-wrap:wrap}}
+
+/* Five destinations, with voting anchored in the center. */
+.bottom-nav a{flex:1;min-width:0;white-space:nowrap;justify-content:center;min-height:44px}.bottom-nav a.nav-vote{font-size:12px;font-weight:750}.bottom-nav a.nav-vote svg{width:29px;height:29px}
+
+/* Persistent navigation on every web page, including desktop previews. */
+body:not(.vote-page){padding-bottom:calc(90px + env(safe-area-inset-bottom,0px))}
+.bottom-nav{position:fixed;display:flex;bottom:0;left:0;right:0;z-index:8;background:var(--surface);border-top:1px solid var(--pink-muted);padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));justify-content:space-around;gap:5px}
+.bottom-nav a{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:11px;color:var(--text-main);text-decoration:none}
+.bottom-nav svg{width:24px;height:24px}
+.bottom-nav a.nav-vote{font-size:12px;font-weight:750}
+.bottom-nav a.nav-vote svg{width:29px;height:29px}
+.native-shell body:not(.vote-page){padding-bottom:0}
