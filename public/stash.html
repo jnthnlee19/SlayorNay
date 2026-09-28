@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#fceef3" />
+  <meta name="description" content="Know your polish collection. Search by brand, color name or number, and check your stash before buying another bottle." />
+  <link rel="icon" href="/stash-icon.png" type="image/png" />
+  <title>My Stash · Gloss or Toss</title>
+<link rel="stylesheet" href="/stash.css" />
+</head>
+<body>
+  <a class="stash-back" data-app-route="profile" href="/#profile">← Your Profile</a>
+  <a class="skip" href="#main">Skip to catalog</a>
+  <div class="header" role="banner">
+    <a class="wordmark" href="/stash.html" aria-label="My Stash home"><img class="gt-app-icon" src="/stash-icon.png" alt="Gloss or Toss" width="42" height="42"/><h1>My <em>Stash</em></h1></a><span id="owned-total" class="stash-total">0</span>
+  </div>
+  <div class="mode-banner" id="mode-banner" role="status"></div>
+  <main id="main">
+    <section class="workspace" aria-label="Polish collection">
+      <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="search" type="search" placeholder="Find a name or number…" autocomplete="off" aria-label="Search color name or number"/></label>
+      <div class="compact-filters">
+        <select id="collection-view" aria-label="Collection view"><option value="all">All polishes</option><option value="owned">My stash</option><option value="unowned">Not owned</option></select>
+        <select id="brands" aria-label="Filter by brand"></select>
+        <select id="color-family" aria-label="Filter by color family"></select>
+      </div>
+      <details class="more-options"><summary>Display options</summary><div><label>Show <select id="display-count" aria-label="Polishes to show"><option value="24">24 polishes</option><option value="60">60 polishes</option><option value="100">100 polishes</option></select></label><label>Sort <select id="sort" aria-label="Sort polishes"><option value="brand">Brand &amp; number</option><option value="name">Name A–Z</option><option value="number">Number</option></select></label></div></details>
+      <div class="result-line"><p id="result-count" role="status" aria-live="polite">Loading your shades…</p><button class="text-button" id="reset" hidden>Clear filters ×</button><div class="layout-toggle" role="group" aria-label="Polish layout"><button type="button" data-layout="list" aria-pressed="true" aria-label="List view" title="List view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><button type="button" data-layout="grid" aria-pressed="false" aria-label="Grid view" title="Grid view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h4v4H3zM10 3h4v4h-4zM17 3h4v4h-4zM3 10h4v4H3zM10 10h4v4h-4zM17 10h4v4h-4zM3 17h4v4H3zM10 17h4v4h-4zM17 17h4v4h-4z"/></svg></button></div></div>
+      <div class="polish-grid" id="results" aria-busy="true"></div>
+      <div class="pagination" id="pagination"></div>
+      <div class="catalog-note"><button id="catalog-info" class="inline-button">About these colors</button></div>
+    </section>
+  </main>
+
+  <dialog id="info-dialog" aria-labelledby="info-title"><button class="dialog-close" data-close aria-label="Close dialog">×</button><span class="eyebrow">THE SHADE INDEX</span><h2 id="info-title">About the catalog</h2><div id="info-content"></div></dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="color-dialog" aria-labelledby="color-title" aria-describedby="color-edit-note">
+    <button class="dialog-close" data-close aria-label="Close color editor">×</button>
+    <span class="eyebrow">MAKE THIS SHADE YOURS</span>
+    <h2 id="color-title">Edit header color</h2><p id="color-subtitle"></p>
+    <p id="color-edit-note">Adjust your header color, color group, or both. Changes apply only to your view.</p>
+    <form id="color-form">
+      <div id="color-preview" aria-live="polite"></div>
+      <div class="color-inputs"><div><label for="color-picker">Color picker</label><input type="color" id="color-picker" aria-label="Choose header color"></div><div><label for="hex-input">Hex code</label><input id="hex-input" type="text" placeholder="#C8798C" maxlength="7" autocomplete="off" spellcheck="false" aria-describedby="color-error"></div></div>
+      <label for="edit-family">Color group</label><select id="edit-family" aria-describedby="family-note"></select><p id="family-note">Automatic uses the hex code, or choose the group that feels right to you.</p>
+        <p id="color-error" class="error" role="status"></p>
+      <button id="save-color" class="primary" type="submit">Save my changes</button>
+      <button id="original-color" class="text-button" type="button">Reset color &amp; group</button>
+    </form>
+  </dialog>
+  <noscript>This app needs JavaScript to search polishes and keep track of your stash.</noscript>
+  <nav class="stash-navigation" aria-label="Main app navigation"><a href="/#profile" data-app-route="profile"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="7" r="4"/><path d="M4 22v-3a8 8 0 0 1 16 0v3Z"/></svg>Profile</a><a href="/stash.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 12h18M8 8V4h8v4M10 16h4"/></svg>My Stash</a><a href="/#vote" data-app-route="vote" class="nav-vote"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m3 10 9-7 9 7v11h-6v-7H9v7H3Z"/></svg>The Vote</a><a href="/#discover" data-app-route="discover"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg>Explore</a><a href="/#submit" data-app-route="submit"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10"/></svg>Submit</a></nav><script type="module" src="/stash-app.mjs"></script>
+</body>
+</html>
+
+
