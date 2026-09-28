@@ -13,7 +13,7 @@ private let site = URL(string: "https://glossortoss.com/")!
 private let initialSection: String = {
     let args = ProcessInfo.processInfo.arguments
     let requested = args.firstIndex(of: "--preview-section").flatMap { $0 + 1 < args.count ? args[$0 + 1] : nil } ?? "vote"
-    return ["vote", "discover", "submit", "profile"].contains(requested) ? requested : "vote"
+    return ["vote", "discover", "submit", "profile", "stash"].contains(requested) ? requested : "vote"
 }()
 
 @main
@@ -24,6 +24,7 @@ struct GlossOrTossApp: App {
 final class BrowserModel: ObservableObject {
     @Published var failure: String?
     @Published var loading = true
+    @Published var section = initialSection
     let webView: WKWebView = {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
@@ -36,14 +37,15 @@ final class BrowserModel: ObservableObject {
     }()
     func open(_ section: String) {
         failure = nil
-        webView.load(URLRequest(url: URL(string: "?native=ios#" + section, relativeTo: site)!.absoluteURL))
+        self.section = section
+        let destination = section == "stash" ? "stash.html?native=ios" : "?native=ios#" + section
+        webView.load(URLRequest(url: URL(string: destination, relativeTo: site)!.absoluteURL))
     }
     func retry() { open("vote") }
 }
 
 struct MainView: View {
     @StateObject private var browser = BrowserModel()
-    @State private var section = initialSection
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -66,18 +68,22 @@ struct MainView: View {
                 }
             }
             HStack {
+                tab("Profile", "person.crop.circle", "profile")
+                tab("My Stash", "tray.full", "stash")
                 tab("The Vote", "house.fill", "vote")
                 tab("Explore", "magnifyingglass", "discover")
                 tab("Submit", "plus.circle", "submit")
-                tab("Profile", "person.crop.circle", "profile")
             }.padding(.top, 10).padding(.bottom, 6).background(Color.white)
         }.background(Color(Bubblegum.canvas)).foregroundStyle(Bubblegum.ink).tint(Bubblegum.pink)
     }
     private func tab(_ title: String, _ icon: String, _ target: String) -> some View {
-        Button { section = target; browser.open(target) } label: {
-            VStack(spacing: 4) { Image(systemName: icon); Text(title).font(.caption) }
-                .frame(maxWidth: .infinity).foregroundStyle(section == target ? Bubblegum.pink : Bubblegum.ink).opacity(section == target ? 1 : 0.55)
-        }.accessibilityAddTraits(section == target ? .isSelected : [])
+        Button { browser.open(target) } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: target == "vote" ? 27 : 22))
+                Text(title).font(.system(size: target == "vote" ? 12 : 11, weight: target == "vote" ? .semibold : .regular)).lineLimit(1)
+            }.frame(minHeight: 44)
+                .frame(maxWidth: .infinity).foregroundStyle(browser.section == target ? Bubblegum.pink : Bubblegum.ink).opacity(browser.section == target ? 1 : 0.55)
+        }.accessibilityAddTraits(browser.section == target ? .isSelected : [])
     }
 }
 
@@ -124,7 +130,11 @@ struct SiteView: UIViewRepresentable {
             presenter.present(sheet, animated: true)
         }
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { model.loading = true; model.failure = nil }
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { model.loading = false }
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            model.loading = false
+            if webView.url?.path == "/stash.html" { model.section = "stash" }
+            else if let route = webView.url?.fragment, ["vote", "discover", "submit", "profile"].contains(route) { model.section = route }
+        }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { failed(error) }
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { failed(error) }
         private func failed(_ error: Error) { if (error as NSError).code != NSURLErrorCancelled { model.loading = false; model.failure = error.localizedDescription } }
