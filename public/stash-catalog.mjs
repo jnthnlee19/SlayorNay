@@ -6,7 +6,7 @@ export function filterCatalog(catalog, { query='', brand='', view='all', sort='b
   const terms = normalize(query).replace(/#/g, '').split(/\s+/).filter(Boolean);
   const colors=new Map(catalog.map(p=>[p.id,colorInfo(effectiveHex(p,overrides))]));
   const tie=(a,b)=>BRANDS.indexOf(a.brand)-BRANDS.indexOf(b.brand)||collator.compare(a.number,b.number)||collator.compare(a.name,b.name);
-  return catalog.filter(p => (!brand || p.brand === brand) && (!family||(family==='unknown'?!colors.get(p.id):effectiveFamily(p,overrides)===family)) && (view === 'all' || (view === 'owned' ? owned.has(p.id) : !owned.has(p.id))) && terms.every(t => normalize(`${p.brand} ${p.name} ${p.number} ${(p.aliases || []).join(' ')}`).includes(t)))
+  return catalog.filter(p => (!p.retired || (view === 'owned' && owned.has(p.id))) && (!brand || p.brand === brand) && (!family||(family==='unknown'?!colors.get(p.id):effectiveFamily(p,overrides)===family)) && (view === 'all' || (view === 'owned' ? owned.has(p.id) : !owned.has(p.id))) && terms.every(t => normalize(`${p.brand} ${p.name} ${p.number} ${(p.aliases || []).join(' ')}`).includes(t)))
     .sort((a,b) => {
       if(['light','dark','hue'].includes(sort)){
         const ca=colors.get(a.id),cb=colors.get(b.id);
